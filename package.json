@@ -1,0 +1,22 @@
+{
+  "name": "growthengine",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace apps/web",
+    "dev:api": "npm run dev --workspace services/api",
+    "dev:worker": "npm run dev --workspace services/workers",
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces",
+    "test": "npm run test --workspaces"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "AI-powered industry simulation platform MVP"
+}
