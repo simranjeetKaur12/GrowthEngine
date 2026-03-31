@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 
 import { contributionRouter } from "./routes/contributions";
+import { growthPathsRouter } from "./routes/growth-paths";
 import { issueRouter } from "./routes/issues";
 import { progressRouter } from "./routes/progress";
 import { problemsRouter } from "./routes/problems";
@@ -26,6 +27,7 @@ export function createApp() {
   app.use("/api/simulations", simulationRouter);
   app.use("/api/progress", progressRouter);
   app.use("/api/users", usersRouter);
+  app.use("/api/growth-paths", growthPathsRouter);
 
   return app;
 }
