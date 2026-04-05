@@ -58,7 +58,7 @@ export default function MySubmissionsPage() {
           <span className="badge status-review border">
             {session?.access_token ? "Authenticated progress" : "Demo progress"}
           </span>
-          <Link href="/" className="ui-button">
+          <Link href="/problems" className="ui-button">
             Browse Problems
           </Link>
         </div>
@@ -67,61 +67,61 @@ export default function MySubmissionsPage() {
       <div className="space-y-6">
         <section className="workspace-card">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <article className="surface-subtle p-5">
+            <article className="metric-card">
               <div className="flex items-center gap-3 text-brand-200">
                 <CheckCircle2 size={20} />
                 <span className="text-sm">Problems Solved</span>
               </div>
-              <p className="mt-4 text-3xl font-semibold text-white">{metrics?.problemsSolved ?? 0}</p>
+              <p className="metric-value">{metrics?.problemsSolved ?? 0}</p>
             </article>
-            <article className="surface-subtle p-5">
+            <article className="metric-card">
               <div className="flex items-center gap-3 text-brand-200">
                 <TimerReset size={20} />
                 <span className="text-sm">Total Attempts</span>
               </div>
-              <p className="mt-4 text-3xl font-semibold text-white">{metrics?.totalAttempts ?? 0}</p>
+              <p className="metric-value">{metrics?.totalAttempts ?? 0}</p>
             </article>
-            <article className="surface-subtle p-5">
+            <article className="metric-card">
               <div className="flex items-center gap-3 text-brand-200">
                 <PlayCircle size={20} />
                 <span className="text-sm">Sessions Started</span>
               </div>
-              <p className="mt-4 text-3xl font-semibold text-white">{metrics?.sessionsStarted ?? 0}</p>
+              <p className="metric-value">{metrics?.sessionsStarted ?? 0}</p>
             </article>
-            <article className="surface-subtle p-5">
+            <article className="metric-card">
               <div className="flex items-center gap-3 text-brand-200">
                 <GitPullRequestArrow size={20} />
                 <span className="text-sm">Contribution Ready</span>
               </div>
-              <p className="mt-4 text-3xl font-semibold text-white">{metrics?.contributionReady ?? 0}</p>
+              <p className="metric-value">{metrics?.contributionReady ?? 0}</p>
             </article>
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="surface-subtle p-5">
+            <div className="surface-elevated p-5">
               <div className="flex items-center gap-3 text-brand-200">
                 <BarChart3 size={20} />
                 <span className="text-sm">Difficulty Distribution</span>
               </div>
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-white/10 bg-slate-950/55 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Beginner</p>
-                  <p className="mt-3 text-2xl font-semibold text-white">{metrics?.difficultyDistribution.beginner ?? 0}</p>
+                <div className="surface-subtle rounded-xl p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted">Beginner</p>
+                  <p className="mt-3 text-2xl font-semibold text-primary">{metrics?.difficultyDistribution.beginner ?? 0}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-slate-950/55 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Intermediate</p>
-                  <p className="mt-3 text-2xl font-semibold text-white">{metrics?.difficultyDistribution.intermediate ?? 0}</p>
+                <div className="surface-subtle rounded-xl p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted">Intermediate</p>
+                  <p className="mt-3 text-2xl font-semibold text-primary">{metrics?.difficultyDistribution.intermediate ?? 0}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-slate-950/55 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Advanced</p>
-                  <p className="mt-3 text-2xl font-semibold text-white">{metrics?.difficultyDistribution.advanced ?? 0}</p>
+                <div className="surface-subtle rounded-xl p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted">Advanced</p>
+                  <p className="mt-3 text-2xl font-semibold text-primary">{metrics?.difficultyDistribution.advanced ?? 0}</p>
                 </div>
               </div>
             </div>
 
-            <div className="surface-subtle p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Tracking</p>
-              <p className="mt-3 text-sm leading-6 text-slate-300">
+            <div className="surface-elevated p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted">Tracking</p>
+              <p className="mt-3 text-sm leading-6 text-secondary">
                 Every simulation session now records attempts, AI verdicts, and contribution readiness.
                 This page turns that data into an engineering progress dashboard.
               </p>
@@ -130,8 +130,8 @@ export default function MySubmissionsPage() {
         </section>
 
         <section className="workspace-card">
-          <h3 className="text-lg font-semibold text-white">Issue Progress</h3>
-          {loading ? <p className="mt-4 text-sm text-slate-400">Loading progress overview...</p> : null}
+          <h3 className="text-lg font-semibold text-primary">Issue Progress</h3>
+          {loading ? <p className="mt-4 text-sm text-secondary">Loading progress overview...</p> : null}
           {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
 
           {!loading && !error ? (
@@ -158,9 +158,9 @@ export default function MySubmissionsPage() {
                         </span>
                       ) : null}
                     </div>
-                    <h4 className="mt-4 text-lg font-semibold text-white">{item.title}</h4>
-                    <p className="mt-2 text-sm text-slate-400">{item.repositoryFullName}</p>
-                    <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-300">
+                    <h4 className="mt-4 text-lg font-semibold text-primary">{item.title}</h4>
+                    <p className="mt-2 text-sm text-secondary">{item.repositoryFullName}</p>
+                    <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-secondary">
                       <span>Attempts {item.attempts}</span>
                       <span>{item.contributionReady ? "Contribution ready" : "Still iterating"}</span>
                     </div>
@@ -171,32 +171,32 @@ export default function MySubmissionsPage() {
                 ))}
               </div>
             ) : (
-              <p className="mt-4 text-sm text-slate-400">No tracked sessions yet. Start a simulation from the Problems page.</p>
+              <p className="mt-4 text-sm text-secondary">No tracked sessions yet. Start a simulation from the Problems page.</p>
             )
           ) : null}
         </section>
 
         <section className="workspace-card">
-          <h3 className="text-lg font-semibold text-white">Activity Timeline</h3>
+          <h3 className="text-lg font-semibold text-primary">Activity Timeline</h3>
           {overview?.timeline.length ? (
             <div className="mt-5 space-y-4">
               {overview.timeline.map((item) => (
-                <article key={item.id} className="relative rounded-2xl border border-white/10 bg-slate-950/55 p-5 pl-8">
+                <article key={item.id} className="timeline-card relative pl-8">
                   <span className="absolute left-4 top-6 h-2.5 w-2.5 rounded-full bg-brand-300 shadow-[0_0_10px_rgba(96,165,250,0.8)]" />
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="status-chip status-review border">{item.type.replace(/_/g, " ")}</span>
-                    <span className="text-xs uppercase tracking-wide text-slate-500">
+                    <span className="text-xs uppercase tracking-wide text-muted">
                       {new Date(item.createdAt).toLocaleString()}
                     </span>
                   </div>
-                  <h4 className="mt-3 text-base font-semibold text-white">{item.issueTitle}</h4>
-                  <p className="mt-1 text-sm text-slate-400">{item.repositoryFullName}</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">{item.summary}</p>
+                  <h4 className="mt-3 text-base font-semibold text-primary">{item.issueTitle}</h4>
+                  <p className="mt-1 text-sm text-secondary">{item.repositoryFullName}</p>
+                  <p className="mt-3 text-sm leading-6 text-secondary">{item.summary}</p>
                 </article>
               ))}
             </div>
           ) : (
-            <p className="mt-4 text-sm text-slate-400">Your timeline will populate after you start a simulation and submit code.</p>
+            <p className="mt-4 text-sm text-secondary">Your timeline will populate after you start a simulation and submit code.</p>
           )}
         </section>
       </div>
