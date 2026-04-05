@@ -1,215 +1,170 @@
 "use client";
 
-import { ArrowUpRight, FolderGit2 } from "lucide-react";
+import { ArrowRight, BrainCircuit, Code2, FolderGit2, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
-import type { ClassifiedIssue } from "@growthengine/shared";
+import { BrandLogo } from "../components/brand-logo";
+import { ThemeToggle } from "../components/theme-toggle";
 
-import { DashboardShell } from "../components/dashboard-shell";
-import { GitHubMark } from "../components/social-icons";
-import { fetchIssues, ingestRepository } from "../lib/api";
+const howItWorks = [
+  "Sync GitHub repository",
+  "Issues converted into structured problems",
+  "Solve inside a simulation workspace",
+  "AI reviews your code like a senior engineer"
+] as const;
 
-const defaultRepo = "vercel/next.js";
+const features = [
+  "Real GitHub issue ingestion",
+  "Difficulty classification",
+  "Code editor with execution",
+  "AI feedback system",
+  "Developer profile tracking",
+  "Contribution guidance"
+] as const;
 
-export default function HomePage() {
-  const [issues, setIssues] = useState<ClassifiedIssue[]>([]);
-  const [repository, setRepository] = useState(defaultRepo);
-  const [difficulty, setDifficulty] = useState("");
-  const [stack, setStack] = useState("");
-  const [sortBy, setSortBy] = useState("recent");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-
-  async function loadIssues(nextFilters?: { difficulty?: string; stack?: string }) {
-    const data = await fetchIssues(nextFilters);
-    setIssues(data);
-  }
-
-  async function handleIngest() {
-    setLoading(true);
-    setMessage("Ingesting real issues from GitHub...");
-
-    try {
-      const result = await ingestRepository(repository);
-      setMessage(`Ingested ${result.ingested} issues from ${result.repository}`);
-      await loadIssues({ difficulty, stack });
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Failed to ingest issues");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadIssues({ difficulty, stack }).catch(() => {
-      setIssues([]);
-      setMessage("No issues available yet. Sync a repository to begin.");
-    });
-  }, [difficulty, stack]);
-
-  const sortedIssues = [...issues].sort((a, b) => {
-    if (sortBy === "difficulty") {
-      const order = { beginner: 1, intermediate: 2, advanced: 3 } as const;
-      return order[a.difficulty] - order[b.difficulty];
-    }
-
-    if (sortBy === "confidence") {
-      return b.confidence - a.confidence;
-    }
-
-    return b.id - a.id;
-  });
-
-  const rightSlot = (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-      Practice against live repository issues, then move into contribution-ready execution.
-    </div>
-  );
-
+export default function LandingPage() {
   return (
-    <DashboardShell
-      title="Problems"
-      subtitle="Real GitHub issues transformed into immersive engineering simulations"
-      rightSlot={rightSlot}
-    >
-      <div className="space-y-6">
-        <section className="workspace-card space-y-6">
-          <div className="toolbar-panel">
-            <div className="toolbar-group">
-              <select
-                value={difficulty}
-                onChange={(event) => setDifficulty(event.target.value)}
-                title="Filter by difficulty"
-                aria-label="Filter by difficulty"
-                className="toolbar-select"
-              >
-                <option value="">All difficulties</option>
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </select>
-              <select
-                value={stack}
-                onChange={(event) => setStack(event.target.value)}
-                title="Filter by technology stack"
-                aria-label="Filter by technology stack"
-                className="toolbar-select"
-              >
-                <option value="">All stacks</option>
-                <option value="nodejs">Node.js</option>
-                <option value="react">React</option>
-                <option value="python">Python</option>
-                <option value="database">Database</option>
-                <option value="devops">DevOps</option>
-                <option value="other">Other</option>
-              </select>
+    <div className="min-h-screen text-[color:var(--text-primary)]">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[color:var(--page-header-bg)]/90 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-4">
+          <BrandLogo href="/" size={48} />
+
+          <nav className="hidden items-center gap-6 text-sm text-[color:var(--text-secondary)] lg:flex">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How it works</a>
+            <Link href="/problems">Problems</Link>
+            <Link href="/auth?next=%2Fdashboard">Login</Link>
+            <Link href="/auth?next=%2Fdashboard" className="ui-button">
+              Signup
+            </Link>
+            <ThemeToggle compact />
+          </nav>
+
+          <div className="flex items-center gap-3 lg:hidden">
+            <ThemeToggle compact />
+            <Link href="/auth?next=%2Fdashboard" className="ui-button">
+              Get Started
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section className="mx-auto grid w-full max-w-7xl gap-10 px-4 py-16 lg:grid-cols-[1fr_0.95fr] lg:py-24">
+          <div className="space-y-6">
+            <p className="inline-flex items-center rounded-full border border-brand-400/20 bg-brand-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-brand-100">
+              Turn Real Issues Into Real Skills.
+            </p>
+            <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-[color:var(--text-primary)] md:text-6xl">
+              Developer Simulation Platform Using Real GitHub Issues
+            </h1>
+            <p className="max-w-3xl text-lg leading-8 text-[color:var(--text-secondary)]">
+              Turn real open-source issues into structured coding simulations and learn like a professional software engineer.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/auth?next=%2Fdashboard" className="ui-button">
+                Get Started
+                <ArrowRight size={18} />
+              </Link>
+              <Link href="/problems" className="ui-button-muted">
+                View Problems
+              </Link>
             </div>
 
-            <div className="toolbar-group">
-              <select
-                value={sortBy}
-                onChange={(event) => setSortBy(event.target.value)}
-                title="Sort problems"
-                aria-label="Sort problems"
-                className="toolbar-select"
-              >
-                <option value="recent">Most recent</option>
-                <option value="difficulty">Difficulty</option>
-                <option value="confidence">AI confidence</option>
-              </select>
-              <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                <input
-                  value={repository}
-                  onChange={(event) => setRepository(event.target.value)}
-                  placeholder="owner/repo"
-                  className="ui-input w-full md:w-56"
-                  aria-label="Repository name"
-                />
-                <button className="ui-button whitespace-nowrap" onClick={handleIngest} disabled={loading}>
-                  <GitHubMark size={18} />
-                  {loading ? "Syncing..." : "Sync GitHub Issues"}
-                </button>
+            <div className="grid gap-4 pt-4 sm:grid-cols-3">
+              <div className="surface-subtle p-4">
+                <FolderGit2 size={20} className="text-brand-200" />
+                <p className="mt-3 text-sm text-[color:var(--text-secondary)]">Pull live GitHub issues into your practice pipeline.</p>
+              </div>
+              <div className="surface-subtle p-4">
+                <Code2 size={20} className="text-brand-200" />
+                <p className="mt-3 text-sm text-[color:var(--text-secondary)]">Code inside a simulation workspace with execution and review.</p>
+              </div>
+              <div className="surface-subtle p-4">
+                <BrainCircuit size={20} className="text-brand-200" />
+                <p className="mt-3 text-sm text-[color:var(--text-secondary)]">Receive structured AI feedback like a senior engineer.</p>
               </div>
             </div>
           </div>
-
-          {message ? <p className="mt-4 text-sm text-brand-200">{message}</p> : null}
+          <div className="workspace-card flex flex-col justify-center">
+            <p className="text-xs uppercase tracking-[0.24em] text-brand-300">What You Practice</p>
+            <h2 className="mt-3 text-3xl font-semibold text-[color:var(--text-primary)]">
+              Real repository context, real engineering loops
+            </h2>
+            <p className="mt-4 text-sm leading-7 text-[color:var(--text-secondary)]">
+              GrowthEngine helps you move from issue discovery to structured problem solving, AI review, and contribution readiness without relying on toy exercises.
+            </p>
+            <div className="mt-8 grid gap-4">
+              <article className="surface-subtle p-5">
+                <p className="text-sm font-medium text-[color:var(--text-primary)]">Structured simulations from real GitHub issues</p>
+                <p className="mt-2 text-sm leading-6 text-[color:var(--text-secondary)]">
+                  GitHub issue noise is cleaned, classified, and rewritten into beginner-friendly problem scenarios.
+                </p>
+              </article>
+              <article className="surface-subtle p-5">
+                <p className="text-sm font-medium text-[color:var(--text-primary)]">Execution, review, and contribution in one flow</p>
+                <p className="mt-2 text-sm leading-6 text-[color:var(--text-secondary)]">
+                  Run code, submit for AI review, and then move into a guided contribution sequence for the original repository.
+                </p>
+              </article>
+            </div>
+          </div>
         </section>
 
-        <section className="workspace-card">
-          {sortedIssues.length ? (
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              {sortedIssues.map((issue) => (
-                <article
-                  className="ui-card origin-center transition-all duration-200 ease-in-out hover:scale-[1.01]"
-                  key={issue.id}
-                >
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`badge ${
-                        issue.difficulty === "beginner"
-                          ? "badge-easy"
-                          : issue.difficulty === "intermediate"
-                            ? "badge-medium"
-                            : "badge-hard"
-                      }`}
-                    >
-                      {issue.difficulty}
-                    </span>
-                    <span className="badge status-review border">AI {(issue.confidence * 100).toFixed(0)}%</span>
-                    {issue.techStack.map((item) => (
-                      <span key={`${issue.id}-${item}`} className="badge border border-white/15 bg-white/5 text-slate-200">
-                        {item}
-                      </span>
-                    ))}
-                  </div>
+        <section id="how-it-works" className="mx-auto w-full max-w-7xl px-4 py-10">
+          <p className="text-xs uppercase tracking-[0.24em] text-brand-300">How It Works</p>
+          <h2 className="mt-3 text-3xl font-semibold text-[color:var(--text-primary)]">A real engineering workflow from discovery to contribution</h2>
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {howItWorks.map((step, index) => (
+              <article key={step} className="ui-card">
+                <span className="badge status-review border">Step {index + 1}</span>
+                <h3 className="mt-4 text-lg font-semibold text-[color:var(--text-primary)]">{step}</h3>
+              </article>
+            ))}
+          </div>
+        </section>
 
-                  <h3 className="mb-2 text-[17px] font-semibold leading-6 text-[#E5E7EB]">{issue.title}</h3>
-                  <p className="line-clamp-2 text-[14px] leading-6 text-[#9CA3AF]">
-                    {issue.body || "No description provided."}
-                  </p>
-
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <Link href={`/issues/${issue.id}`} className="ui-button">
-                      Start Simulation
-                      <ArrowUpRight size={18} />
-                    </Link>
-                    <a className="ui-button-muted" href={issue.url} target="_blank" rel="noreferrer">
-                      View on GitHub
-                    </a>
-                  </div>
+        <section id="features" className="mx-auto w-full max-w-7xl px-4 py-10">
+          <div className="grid gap-6 lg:grid-cols-[0.75fr_1.25fr]">
+            <div className="workspace-card">
+              <p className="text-xs uppercase tracking-[0.24em] text-brand-300">Features</p>
+              <h2 className="mt-3 text-3xl font-semibold text-[color:var(--text-primary)]">Built for professional-level practice</h2>
+              <p className="mt-4 text-sm leading-7 text-[color:var(--text-secondary)]">
+                GrowthEngine connects real issue ingestion, simulation, execution, AI evaluation, and contribution guidance in one workflow.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {features.map((feature) => (
+                <article key={feature} className="surface-subtle p-5">
+                  <Sparkles size={18} className="text-brand-200" />
+                  <p className="mt-4 text-sm font-medium text-[color:var(--text-primary)]">{feature}</p>
                 </article>
               ))}
             </div>
-          ) : (
-            <div className="py-10">
-              <div className="empty-state-card">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/80">
-                  <GitHubMark size={32} className="text-slate-100" />
-                </div>
-                <h3 className="mt-6 text-2xl font-semibold text-white">No problems yet</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Sync a GitHub repository to pull in real issues and turn them into hands-on simulation problems.
-                </p>
-                <div className="mt-6 flex flex-col gap-4 sm:flex-row">
-                  <input
-                    value={repository}
-                    onChange={(event) => setRepository(event.target.value)}
-                    placeholder="owner/repo"
-                    className="ui-input flex-1"
-                    aria-label="Repository to sync"
-                  />
-                  <button className="ui-button sm:min-w-[154px]" onClick={handleIngest} disabled={loading}>
-                    <FolderGit2 size={18} />
-                    {loading ? "Syncing..." : "Sync Issues"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
         </section>
-      </div>
-    </DashboardShell>
+      </main>
+
+      <footer className="mt-10 border-t border-white/10 bg-[color:var(--page-header-bg)]/90">
+        <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-10 md:grid-cols-[1fr_1fr_auto]">
+          <div>
+            <BrandLogo href="/" size={44} />
+            <p className="mt-4 max-w-md text-sm leading-6 text-[color:var(--text-secondary)]">
+              GrowthEngine converts open-source issues into structured developer simulations with feedback and contribution steps.
+            </p>
+          </div>
+          <div className="grid gap-2 text-sm text-[color:var(--text-secondary)]">
+            <Link href="/auth?next=%2Fdashboard">Login</Link>
+            <Link href="/auth?next=%2Fdashboard">Signup</Link>
+            <Link href="/problems">Problems</Link>
+            <a href="https://github.com" target="_blank" rel="noreferrer">GitHub</a>
+            <a href="mailto:hello@growthengine.dev">hello@growthengine.dev</a>
+          </div>
+          <div className="flex items-start md:justify-end">
+            <ThemeToggle />
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }

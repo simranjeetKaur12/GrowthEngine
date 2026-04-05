@@ -60,7 +60,7 @@ export default function FindProblemsPage() {
             <RefreshCcw size={18} />
             {refreshing ? "Refreshing..." : "Refresh Curated Index"}
           </button>
-          <Link href="/" className="ui-button-muted">
+          <Link href="/problems" className="ui-button-muted">
             Back to Problems
           </Link>
         </div>
@@ -111,7 +111,7 @@ export default function FindProblemsPage() {
               </button>
             </div>
           ) : (
-            <p className="mt-5 text-sm text-slate-300">{message}</p>
+            <p className="mt-5 text-sm text-secondary">{message}</p>
           )}
         </section>
 
@@ -125,14 +125,14 @@ export default function FindProblemsPage() {
                       {problem.difficulty}
                     </span>
                     {problem.skills.map((item) => (
-                      <span key={`${problem.id}-${item}`} className="badge border border-white/15 bg-white/5 text-slate-200">
+                      <span key={`${problem.id}-${item}`} className="badge border border-white/15 bg-white/5 text-primary">
                         {item}
                       </span>
                     ))}
                   </div>
-                  <h3 className="mt-4 text-lg font-semibold text-white">{problem.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">{problem.body || "No description provided."}</p>
-                  <p className="mt-3 text-sm text-slate-500">{problem.sourceRepo}</p>
+                  <h3 className="mt-4 text-lg font-semibold text-primary">{problem.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-secondary">{problem.body || "No description provided."}</p>
+                  <p className="mt-3 text-sm text-muted">{problem.sourceRepo}</p>
                   <div className="mt-5 flex flex-wrap items-center gap-2">
                     <Link href={`/issues/${problem.issueId}`} className="ui-button">
                       Start Simulation
@@ -146,7 +146,7 @@ export default function FindProblemsPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-slate-400">No curated problems loaded yet. Refresh the curated index or change filters.</p>
+            <p className="text-sm text-secondary">No curated problems loaded yet. Refresh the curated index or change filters.</p>
           )}
         </section>
       </div>
