@@ -5,22 +5,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { DashboardShell } from "../../components/dashboard-shell";
+import { BrandLogo } from "../../components/brand-logo";
+import { createUserProfile } from "../../lib/api";
 import { isSupabaseBrowserConfigured, supabaseBrowser } from "../../lib/supabase-browser";
 
 export default function AuthPage() {
   const router = useRouter();
-  
+
   const nextPath = useMemo(() => {
     if (typeof window === "undefined") {
-      return "/";
+      return "/dashboard";
     }
 
     const params = new URLSearchParams(window.location.search);
-    return params.get("next") || "/";
+    return params.get("next") || "/dashboard";
   }, []);
 
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Sign in to run submissions and track contributions.");
@@ -33,10 +35,18 @@ export default function AuthPage() {
 
     setLoading(true);
     try {
-      const { error } = await supabaseBrowser.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabaseBrowser.auth.signInWithPassword({ email, password });
       if (error) {
         setMessage(error.message);
         return;
+      }
+
+      if (data.user?.id) {
+        await createUserProfile({
+          id: data.user.id,
+          name: (data.user.user_metadata?.full_name as string | undefined) ?? name ?? undefined,
+          email: data.user.email ?? email
+        });
       }
 
       router.replace(nextPath);
@@ -78,10 +88,26 @@ export default function AuthPage() {
 
     setLoading(true);
     try {
-      const { error } = await supabaseBrowser.auth.signUp({ email, password });
+      const { data, error } = await supabaseBrowser.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name
+          }
+        }
+      });
       if (error) {
         setMessage(error.message);
         return;
+      }
+
+      if (data.user?.id) {
+        await createUserProfile({
+          id: data.user.id,
+          name,
+          email: data.user.email ?? email
+        });
       }
 
       setMessage("Signup complete. If email confirmation is enabled, confirm then sign in.");
@@ -91,27 +117,35 @@ export default function AuthPage() {
   }
 
   return (
-    <DashboardShell
-      title="Authentication"
-      subtitle="Secure your simulation history, AI reviews, and open-source contribution trail"
-      rightSlot={
-        <Link href="/" className="ui-button-muted">
-          Back to Problems
-        </Link>
-      }
-    >
-      <section className="mx-auto max-w-2xl">
+    <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-4 py-12">
+      <section className="w-full max-w-2xl">
         <div className="ui-card">
-          <h3 className="text-xl font-semibold text-white">Sign in or create an account</h3>
-          <p className="mt-2 text-sm text-slate-300">{message}</p>
-          {!isSupabaseBrowserConfigured ? (
-            <p className="mt-3 text-sm text-amber-200">
-              The frontend is currently running without public Supabase credentials.
-            </p>
-          ) : null}
+          <div className="mb-8 flex justify-center">
+            <BrandLogo size={72} priority showWordmark={false} />
+          </div>
 
-          <div className="mt-5 grid gap-4">
-            <label className="grid gap-2 text-sm text-slate-300">
+          <div className="text-center">
+            <h1 className="text-3xl font-semibold text-primary">Sign in or create an account</h1>
+            <p className="mt-3 text-sm leading-6 text-secondary">{message}</p>
+            {!isSupabaseBrowserConfigured ? (
+              <p className="mt-3 text-sm text-amber-200">
+                The frontend is currently running without public Supabase credentials.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-8 grid gap-4">
+            <label className="grid gap-2 text-sm text-secondary">
+              Name
+              <input
+                className="ui-input"
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Your name"
+              />
+            </label>
+            <label className="grid gap-2 text-sm text-secondary">
               Email
               <input
                 className="ui-input"
@@ -121,8 +155,7 @@ export default function AuthPage() {
                 placeholder="you@example.com"
               />
             </label>
-
-            <label className="grid gap-2 text-sm text-slate-300">
+            <label className="grid gap-2 text-sm text-secondary">
               Password
               <input
                 className="ui-input"
@@ -134,17 +167,12 @@ export default function AuthPage() {
             </label>
           </div>
 
-          <div className="mt-5 space-y-2">
+          <div className="mt-6 space-y-2">
             <button className="ui-button flex w-full gap-3" type="button" disabled={loading || !email || !password} onClick={handleSignIn}>
               <Mail size={19} />
               {loading ? "Working..." : "Sign In"}
             </button>
-            <button
-              className="ui-button-muted flex w-full gap-3"
-              type="button"
-              disabled={loading || !email || !password}
-              onClick={handleSignUp}
-            >
+            <button className="ui-button-muted flex w-full gap-3" type="button" disabled={loading || !name || !email || !password} onClick={handleSignUp}>
               <UserPlus size={19} />
               {loading ? "Working..." : "Create Account"}
             </button>
@@ -169,8 +197,14 @@ export default function AuthPage() {
               Continue with GitHub
             </button>
           </div>
+
+          <div className="mt-6 flex justify-center">
+            <Link href="/" className="ui-button-muted">
+              Back to Landing
+            </Link>
+          </div>
         </div>
       </section>
-    </DashboardShell>
+    </main>
   );
 }
