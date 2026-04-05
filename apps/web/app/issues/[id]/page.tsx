@@ -41,6 +41,7 @@ import {
 import { DashboardShell } from "../../../components/dashboard-shell";
 import { GitHubMark } from "../../../components/social-icons";
 import { supabaseBrowser } from "../../../lib/supabase-browser";
+import { useTheme } from "../../../components/theme-provider";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false
@@ -126,6 +127,7 @@ type ExecuteResult = {
 export default function IssueSolvePage({ params }: { params: { id: string } }) {
   const issueId = Number(params.id);
   const router = useRouter();
+  const { mounted, theme } = useTheme();
 
   const [issue, setIssue] = useState<ClassifiedIssue | null>(null);
   const [history, setHistory] = useState<SubmissionHistoryItem[]>([]);
@@ -148,6 +150,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
   const [sourceCode, setSourceCode] = useState(starterCode(71));
   const [stdin, setStdin] = useState("");
   const [expectedOutput, setExpectedOutput] = useState("");
+  const [showHint, setShowHint] = useState(false);
   const [execution, setExecution] = useState<ExecuteResult | null>(null);
   const [evaluation, setEvaluation] = useState<{
     verdict: "pass" | "fail" | "review";
@@ -172,11 +175,12 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
   );
 
   const aiCleanSummary = useMemo(() => {
-    if (!issue?.body) {
+    if (!issue) {
       return "This issue requires an implementation update in the target repository.";
     }
 
-    return issue.body.length > 220 ? `${issue.body.slice(0, 220)}...` : issue.body;
+    const scenarioText = issue.scenarioBody ?? issue.body;
+    return scenarioText.length > 320 ? `${scenarioText.slice(0, 320)}...` : scenarioText;
   }, [issue]);
 
   const splitClass = useMemo(() => {
@@ -461,8 +465,8 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
   }
 
   const rightSlot = (
-    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/50 p-2">
-      <Link href="/" className="ui-button-muted">
+    <div className="panel-note flex flex-wrap items-center gap-2 p-2">
+      <Link href="/problems" className="ui-button-muted">
         Back to Problems
       </Link>
       <span className="badge status-review border">
@@ -478,7 +482,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
       rightSlot={rightSlot}
     >
       <div className="section-card mb-6 flex flex-wrap items-center gap-3">
-        <span className="text-xs uppercase tracking-wide text-[#9CA3AF]">Panel Split</span>
+        <span className="text-xs uppercase tracking-wide text-secondary">Panel Split</span>
         <input
           type="range"
           min={30}
@@ -488,7 +492,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
           className="h-2 w-52 cursor-pointer accent-blue-500"
           aria-label="Resize context and editor panels"
         />
-        <span className="text-sm text-[#E5E7EB]">{leftPanelPercent}% / {100 - leftPanelPercent}%</span>
+        <span className="text-sm text-primary">{leftPanelPercent}% / {100 - leftPanelPercent}%</span>
       </div>
 
       <section className={`grid grid-cols-1 gap-6 ${splitClass}`}>
@@ -509,7 +513,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                     {issue.difficulty}
                   </span>
                   {issue.techStack.map((tag) => (
-                    <span key={tag} className="badge border border-white/15 bg-white/5 text-slate-200">
+                    <span key={tag} className="badge border border-white/15 bg-white/5 text-primary">
                       {tag}
                     </span>
                   ))}
@@ -517,8 +521,10 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
               ) : null}
             </div>
 
-            <h3 className="text-xl font-semibold text-white">{issue?.title ?? "Loading issue..."}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
+            <h3 className="text-xl font-semibold text-primary">
+              {issue?.scenarioTitle ?? issue?.title ?? "Loading issue..."}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-secondary">
               You are a software engineer assigned to triage and deliver a production-safe fix with
               testable output and contribution-ready changes.
             </p>
@@ -547,21 +553,80 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
               </button>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-sm leading-6 text-slate-200">
+            <div className="surface-elevated mt-4 p-4 text-sm leading-6 text-primary">
               {contextTab === "scenario" ? (
-                <p>{aiCleanSummary}</p>
+                <div className="space-y-4">
+                  <p>{aiCleanSummary}</p>
+                  <div className="rounded-2xl border border-brand-400/20 bg-brand-500/10 p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-brand-100">Max Learning Workflow</p>
+                    <p className="mt-2 text-sm leading-6 text-secondary">
+                      Treat this like real engineering work. Study the repository first, understand where the behavior lives,
+                      and only then move into implementation.
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      <div className="step-item">
+                        <span className="step-index">1</span>
+                        <span>Open the GitHub repository and scan the README, contribution docs, and issue thread for context.</span>
+                      </div>
+                      <div className="step-item">
+                        <span className="step-index">2</span>
+                        <span>Explore the codebase structure to find the feature area, related modules, and existing tests.</span>
+                      </div>
+                      <div className="step-item">
+                        <span className="step-index">3</span>
+                        <span>Trace where the current behavior is implemented, then identify the exact place where a fix is most likely needed.</span>
+                      </div>
+                      <div className="step-item">
+                        <span className="step-index">4</span>
+                        <span>Write down the expected behavior, edge cases, and how you will verify the fix before changing code.</span>
+                      </div>
+                      <div className="step-item">
+                        <span className="step-index">5</span>
+                        <span>Only after you understand the flow, use the editor here to implement, test, review, and improve your solution.</span>
+                      </div>
+                    </div>
+                    {issue ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <a className="ui-button-muted" href={`https://github.com/${issue.repositoryFullName}`} target="_blank" rel="noreferrer">
+                          Open Repository
+                        </a>
+                        <a className="ui-button-muted" href={issue.url} target="_blank" rel="noreferrer">
+                          Review Original Issue
+                        </a>
+                      </div>
+                    ) : null}
+                  </div>
+                  {issue?.learningObjectives?.length ? (
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted">Learning Objectives</p>
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-secondary">
+                        {issue.learningObjectives.map((objective) => (
+                          <li key={objective}>{objective}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
               {contextTab === "requirements" ? (
-                <ul className="list-disc space-y-1 pl-5">
-                  <li>Implement a deterministic, testable fix for the issue.</li>
-                  <li>Handle edge cases and malformed input safely.</li>
-                  <li>Ensure output aligns with expected contract.</li>
-                  <li>Prepare code for upstream PR submission.</li>
-                </ul>
+                issue?.acceptanceCriteria?.length ? (
+                  <ul className="list-disc space-y-1 pl-5">
+                    {issue.acceptanceCriteria.map((criterion) => (
+                      <li key={criterion}>{criterion}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <ul className="list-disc space-y-1 pl-5">
+                    <li>Implement a deterministic, testable fix for the issue.</li>
+                    <li>Handle edge cases and malformed input safely.</li>
+                    <li>Ensure output aligns with expected contract.</li>
+                    <li>Prepare code for upstream PR submission.</li>
+                  </ul>
+                )
               ) : null}
               {contextTab === "source" ? (
                 <div className="space-y-2">
-                  <p className="text-slate-300">Reference the original issue for full project context:</p>
+                  <p className="text-secondary">Reference the original issue for full project context:</p>
                   <a href={issue?.url ?? "#"} target="_blank" rel="noreferrer" className="ui-button-muted inline-flex gap-2">
                     <ExternalLink size={18} />
                     View on GitHub
@@ -570,19 +635,19 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
               ) : null}
             </div>
 
-            <details className="mt-4 rounded-xl border border-white/10 bg-slate-900/55 p-3 text-sm text-slate-300">
-              <summary className="cursor-pointer font-semibold text-slate-100">Expand raw issue details</summary>
+            <details className="surface-elevated mt-4 rounded-xl p-3 text-sm text-secondary">
+              <summary className="cursor-pointer font-semibold text-primary">Expand raw issue details</summary>
               <p className="mt-3 whitespace-pre-wrap leading-6">{issue?.body ?? "No issue body"}</p>
             </details>
           </div>
 
           <div className="ui-card">
-            <h4 className="flex items-center gap-2 text-lg font-semibold text-white">
+            <h4 className="flex items-center gap-2 text-lg font-semibold text-primary">
               <CircleDashed size={22} />
               AI Review Panel
             </h4>
             {evaluation ? (
-              <div className="mt-3 space-y-3 text-sm text-slate-200">
+              <div className="mt-3 space-y-3 text-sm text-primary">
                 <div>
                   <span className={`status-chip ${toStatusTone(evaluation.verdict)} gap-1`}>
                     {evaluation.verdict === "pass" ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
@@ -598,7 +663,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                     <Bug size={20} />
                     Bugs
                   </h5>
-                  <ul className="list-disc space-y-1 pl-5 text-slate-300">
+                  <ul className="list-disc space-y-1 pl-5 text-secondary">
                     {evaluation.risks.length ? (
                       evaluation.risks.map((item) => <li key={item}>{item}</li>)
                     ) : (
@@ -611,7 +676,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                     <Lightbulb size={20} />
                     Improvements
                   </h5>
-                  <ul className="list-disc space-y-1 pl-5 text-slate-300">
+                  <ul className="list-disc space-y-1 pl-5 text-secondary">
                     {evaluation.suggestions.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
@@ -622,7 +687,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                     <Rocket size={20} />
                     Optimization
                   </h5>
-                  <ul className="list-disc space-y-1 pl-5 text-slate-300">
+                  <ul className="list-disc space-y-1 pl-5 text-secondary">
                     {evaluation.strengths.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
@@ -630,7 +695,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                 </div>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-slate-300">
+              <p className="mt-2 text-sm text-secondary">
                 Run and evaluate your code to receive senior engineer style feedback with bugs,
                 optimizations, and code quality notes.
               </p>
@@ -641,7 +706,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
         <div className="space-y-6">
           <div className="ui-card">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h4 className="text-lg font-semibold text-white">Coding Environment</h4>
+              <h4 className="text-lg font-semibold text-primary">Coding Environment</h4>
               <div className="flex flex-wrap gap-2">
                 {simulationSession ? (
                   <>
@@ -679,7 +744,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                     height="460px"
                     language={selectedLanguage.monaco}
                     value={sourceCode}
-                    theme="vs-dark"
+                    theme={mounted && theme === "light" ? "light" : "vs-dark"}
                     onChange={(value) => setSourceCode(value ?? "")}
                     options={{
                       minimap: { enabled: false },
@@ -692,7 +757,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  <label className="grid gap-2 text-xs uppercase tracking-wider text-slate-400">
+                  <label className="grid gap-2 text-xs uppercase tracking-wider text-secondary">
                     Standard Input
                     <textarea
                       value={stdin}
@@ -701,7 +766,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                       className="ui-input"
                     />
                   </label>
-                  <label className="grid gap-2 text-xs uppercase tracking-wider text-slate-400">
+                  <label className="grid gap-2 text-xs uppercase tracking-wider text-secondary">
                     Expected Output
                     <textarea
                       value={expectedOutput}
@@ -719,16 +784,31 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                   <button
                     className="ui-button-muted"
                     type="button"
+                    onClick={() => setShowHint((value) => !value)}
+                    disabled={!issue?.learningObjectives?.length}
+                  >
+                    {showHint ? "Hide Hint" : "Show Hint"}
+                  </button>
+                  <button
+                    className="ui-button-muted"
+                    type="button"
                     onClick={handleEvaluate}
                     disabled={isEvaluating || !execution?.submissionId}
                   >
-                    {isEvaluating ? "Reviewing..." : "Get AI Feedback"}
+                    {isEvaluating ? "Reviewing..." : "Submit Solution"}
                   </button>
                   {message ? <span className="text-sm text-brand-200">{message}</span> : null}
                 </div>
 
+                {showHint && issue?.learningObjectives?.length ? (
+                  <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-amber-100">Hint</p>
+                    <p className="mt-2 text-sm leading-6 text-primary">{issue.learningObjectives[0]}</p>
+                  </div>
+                ) : null}
+
                 {execution ? (
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                  <div className="surface-elevated mt-4 p-4">
                     <div className="mb-2 flex flex-wrap gap-2">
                       <span className={`status-chip border gap-1 ${execution.status.id === 3 ? "status-pass" : "status-fail"}`}>
                         {execution.status.id === 3 ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
@@ -747,7 +827,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                         Expected Output {execution.expectedOutputMatch === null ? "N/A" : execution.expectedOutputMatch ? "Matched" : "Mismatch"}
                       </span>
                     </div>
-                    <p className="mb-1 text-xs uppercase tracking-wide text-[#6B7280]">Console Output</p>
+                    <p className="mb-1 text-xs uppercase tracking-wide text-muted">Console Output</p>
                     <pre className="code-block">{execution.stdout || "<no stdout>"}</pre>
                     {execution.stderr ? <pre className="code-block">stderr: {execution.stderr}</pre> : null}
                     {execution.compile_output ? (
@@ -759,8 +839,8 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
             ) : (
               <div className="surface-subtle p-6">
                 <p className="text-xs uppercase tracking-[0.22em] text-brand-300">Simulation Workspace</p>
-                <h5 className="mt-3 text-2xl font-semibold text-white">Start Simulation</h5>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+                <h5 className="mt-3 text-2xl font-semibold text-primary">Start Simulation</h5>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-secondary">
                   Initialize a tracked session for this issue, unlock the coding environment, and
                   capture your attempts, AI reviews, and contribution readiness from one workflow.
                 </p>
@@ -768,7 +848,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                   <button className="ui-button" type="button" onClick={handleStartSimulation} disabled={isStartingSimulation}>
                     {isStartingSimulation ? "Starting..." : "Start Simulation"}
                   </button>
-                  <span className="text-sm text-slate-400">
+                  <span className="text-sm text-secondary">
                     {session?.access_token
                       ? "Your authenticated progress will be tracked."
                       : "Running in demo mode with backend in-memory tracking."}
@@ -783,8 +863,8 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-brand-300">Guided Contribution Mode</p>
-                  <h4 className="mt-2 text-xl font-semibold text-white">Ready to Contribute?</h4>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                  <h4 className="mt-2 text-xl font-semibold text-primary">Ready to Contribute?</h4>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-secondary">
                     Use this issue as a bridge from simulation to real-world contribution. Follow the
                     workflow below, apply your validated fix, and open a PR upstream.
                   </p>
@@ -805,6 +885,11 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                       View Issue on GitHub
                     </a>
                   ) : null}
+                  {issue ? (
+                    <Link className="ui-button-muted" href={`/issues/${issue.id}/contribution`}>
+                      Open Contribution Page
+                    </Link>
+                  ) : null}
                 </div>
               </div>
 
@@ -812,10 +897,10 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                 <div className="surface-subtle p-5">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/80">
-                      <GitHubMark size={20} className="text-slate-100" />
+                      <GitHubMark size={20} className="text-primary" />
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Repository</p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted">Repository</p>
                       <a
                         href={issue ? `https://github.com/${issue.repositoryFullName}` : "#"}
                         target="_blank"
@@ -873,9 +958,9 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                     </div>
                   </div>
 
-                  <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Ready to Contribute?</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                  <div className="timeline-card mt-6">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted">Ready to Contribute?</p>
+                    <p className="mt-2 text-sm leading-6 text-secondary">
                       Your simulation run is done. Carry the same fix into the upstream repository and
                       submit it as a real contribution.
                     </p>
@@ -884,7 +969,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                   {guideSteps.length ? (
                     <div className="mt-6 rounded-2xl border border-brand-400/20 bg-brand-500/10 p-4">
                       <p className="text-sm font-medium text-brand-100">Guide status</p>
-                      <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-300">
+                      <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-secondary">
                         {contributionSteps.map((step) => (
                           <li key={step}>{step}</li>
                         ))}
@@ -896,8 +981,8 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                 <div className="surface-subtle p-5">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Git Commands</p>
-                      <p className="mt-2 text-sm text-slate-400">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted">Git Commands</p>
+                      <p className="mt-2 text-sm text-secondary">
                         Run these locally after forking to move your fix into a real branch.
                       </p>
                     </div>
@@ -923,8 +1008,8 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                   ) : null}
 
                   {activeGuide ? (
-                    <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/55 p-4">
-                      <p className="text-sm text-slate-300">
+                    <div className="timeline-card mt-5">
+                      <p className="text-sm text-secondary">
                         Branch <span className="font-semibold text-brand-200">{activeGuide.branch_name}</span>
                       </p>
                       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -967,7 +1052,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                       </button>
                     </div>
                   ) : (
-                    <p className="mt-4 text-sm text-slate-400">
+                    <p className="mt-4 text-sm text-secondary">
                       Prepare the guide to generate a tracked branch name and save your pull request URL.
                     </p>
                   )}
@@ -977,11 +1062,11 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
           ) : null}
 
           <div className="ui-card">
-            <h4 className="text-lg font-semibold text-white">My Submissions</h4>
+            <h4 className="text-lg font-semibold text-primary">My Submissions</h4>
             <div className="mt-3 space-y-2">
               {history.length ? (
                 history.map((item) => (
-                  <article key={item.id} className="rounded-xl border border-white/10 bg-slate-900/65 p-3 text-sm text-slate-300">
+                  <article key={item.id} className="surface-elevated rounded-xl p-3 text-sm text-secondary">
                     <div className="mb-1 flex flex-wrap gap-2">
                       <span className="status-chip status-review border">
                         {new Date(item.created_at).toLocaleString()}
@@ -1016,17 +1101,17 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-400">No submissions yet for this issue.</p>
+                <p className="text-sm text-secondary">No submissions yet for this issue.</p>
               )}
             </div>
           </div>
 
           <div className="ui-card">
-            <h4 className="text-lg font-semibold text-white">Contribution History</h4>
+            <h4 className="text-lg font-semibold text-primary">Contribution History</h4>
             <div className="mt-3 space-y-2">
               {contributions.length ? (
                 contributions.map((guide) => (
-                  <article key={guide.id} className="rounded-xl border border-white/10 bg-slate-900/65 p-3 text-sm text-slate-300">
+                  <article key={guide.id} className="surface-elevated rounded-xl p-3 text-sm text-secondary">
                     <div className="mb-1 flex flex-wrap gap-2">
                       <span className="status-chip status-review border">{new Date(guide.updated_at).toLocaleString()}</span>
                       <span className="status-chip status-review border">{guide.pr_status}</span>
@@ -1038,7 +1123,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-400">No contribution records yet.</p>
+                <p className="text-sm text-secondary">No contribution records yet.</p>
               )}
             </div>
           </div>
