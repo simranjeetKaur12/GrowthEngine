@@ -1,4 +1,7 @@
 # GrowthEngine
+<p align="center">
+  <img src="./images/Screenshot%202026-04-12%20211319.png" alt="GrowthEngine product screen 1" width="47%" />
+</p>
 
 ### Turning Real GitHub Issues into Real Developer Growth 🚀
 
@@ -303,20 +306,18 @@ The screenshots below show different parts of the GrowthEngine experience, from 
 
 <p align="center">
   <img src="./lightTheme.png" alt="GrowthEngine light theme landing page" width="47%" />
-  <img src="./darkTheme.png" alt="GrowthEngine dark theme landing page" width="47%" />
 </p>
 
 ### Product Screens
 
 <p align="center">
-  <img src="./Screenshot%202026-04-12%20211319.png" alt="GrowthEngine product screen 1" width="47%" />
-  <img src="./Screenshot%202026-04-17%20094241.png" alt="GrowthEngine product screen 2" width="47%" />
+  <img src="./images/Screenshot%202026-04-17%20094241.png" alt="GrowthEngine product screen 2" width="47%" />
+  <img src="./images/Screenshot%202026-04-17%20182142.png" alt="GrowthEngine product screen 3" width="47%" />
 </p>
 
 <p align="center">
-  <img src="./Screenshot%202026-04-17%20182142.png" alt="GrowthEngine product screen 3" width="31%" />
-  <img src="./Screenshot%202026-04-17%20182242.png" alt="GrowthEngine product screen 4" width="31%" />
-  <img src="./Screenshot%202026-04-17%20182347.png" alt="GrowthEngine product screen 5" width="31%" />
+  <img src="./images/Screenshot%202026-04-17%20182242.png" alt="GrowthEngine product screen 4" width="47%" />
+  <img src="./images/Screenshot%202026-04-17%20182347.png" alt="GrowthEngine product screen 5" width="47%" />
 </p>
 
 ---
