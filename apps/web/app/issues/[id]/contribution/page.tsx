@@ -22,6 +22,7 @@ export default function ContributionPage({ params }: { params: { id: string } })
   const [issue, setIssue] = useState<Awaited<ReturnType<typeof fetchIssueById>> | null>(null);
   const [guide, setGuide] = useState<ContributionGuideRecord | null>(null);
   const [draft, setDraft] = useState<ContributionDraft | null>(null);
+  const [guideSteps, setGuideSteps] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
@@ -60,6 +61,15 @@ export default function ContributionPage({ params }: { params: { id: string } })
     ])
       .then(([issueResult, history]) => {
         setIssue(issueResult);
+        setGuideSteps([
+          "Fork the repository",
+          "Clone it locally",
+          "Create a new branch",
+          "Apply the changes",
+          "Write the commit message",
+          "Push the branch",
+          "Open a pull request"
+        ]);
         if (history.length) {
           setGuide(history[0]);
           setPrUrl(history[0].pr_url ?? "");
@@ -111,6 +121,7 @@ export default function ContributionPage({ params }: { params: { id: string } })
       });
       setGuide(result.guide);
       setDraft(result.draft);
+      setGuideSteps(result.steps);
       setPrUrl(result.guide.pr_url ?? "");
       setMessage("Contribution guide prepared.");
     } catch (error) {
@@ -181,21 +192,28 @@ export default function ContributionPage({ params }: { params: { id: string } })
 
         <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
           <div className="workspace-card">
-            <h4 className="text-lg font-semibold text-primary">Contribution Checklist</h4>
+            <h4 className="text-lg font-semibold text-primary">Contribution Guide</h4>
             <div className="mt-5 space-y-3">
-              {[
-                { icon: GitFork, label: "Fork repository" },
-                { icon: TerminalSquare, label: "Clone repo locally" },
-                { icon: GitBranchPlus, label: "Create a new branch" },
-                { icon: GitCommitHorizontal, label: "Apply and commit the fix" },
-                { icon: GitPullRequestArrow, label: "Push branch and open pull request" }
-              ].map(({ icon: ItemIcon, label }, index) => {
+              {guideSteps.map((step, index) => {
+                const Icon =
+                  index === 0
+                    ? GitFork
+                    : index === 1
+                      ? TerminalSquare
+                      : index === 2
+                        ? GitBranchPlus
+                        : index === 3
+                          ? GitCommitHorizontal
+                          : index === 6
+                            ? GitPullRequestArrow
+                            : GitCommitHorizontal;
+
                 return (
-                  <div key={label} className="step-item">
+                  <div key={step} className="step-item">
                     <span className="step-index">{index + 1}</span>
                     <div className="flex items-center gap-3">
-                      <ItemIcon size={18} className="text-brand-300" />
-                      <span>{label}</span>
+                      <Icon size={18} className="text-brand-300" />
+                      <span>{step}</span>
                     </div>
                   </div>
                 );
@@ -252,6 +270,8 @@ export default function ContributionPage({ params }: { params: { id: string } })
                         event.target.value as "opened" | "in_review" | "changes_requested" | "merged" | "closed"
                       )
                     }
+                    aria-label="Pull request status"
+                    title="Pull request status"
                     className="ui-input"
                   >
                     <option value="opened">opened</option>

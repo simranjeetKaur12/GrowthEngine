@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderGit2, Map, Search, Settings, TerminalSquare, UserCircle2 } from "lucide-react";
+import { FolderGit2, Menu, Map, Search, Settings, TerminalSquare, UserCircle2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -22,39 +22,72 @@ export function DashboardShell({
   title,
   subtitle,
   rightSlot,
-  children
+  children,
+  navigationMode = "drawer"
 }: {
   title: string;
   subtitle?: string;
   rightSlot?: React.ReactNode;
   children: React.ReactNode;
+  navigationMode?: "drawer" | "sidebar";
 }) {
   const pathname = usePathname();
   const [sidebarVisible, setSidebarVisible] = useState(false);
 
   useEffect(() => {
-    setSidebarVisible(false);
+    setSidebarVisible(navigationMode === "sidebar");
   }, [pathname]);
+
+  useEffect(() => {
+    setSidebarVisible(navigationMode === "sidebar");
+  }, [navigationMode]);
+
+  const shouldShowPersistentSidebar = navigationMode === "sidebar";
 
   return (
     <div className="min-h-screen text-primary">
       <div className="relative mx-auto min-h-screen w-full max-w-[1500px]">
-        <button
-          type="button"
-          aria-label="Reveal sidebar"
-          className="fixed inset-y-0 left-0 z-30 hidden w-8 bg-transparent lg:block"
-          onMouseEnter={() => setSidebarVisible(true)}
-        />
+        {sidebarVisible && navigationMode === "drawer" ? (
+          <button
+            type="button"
+            aria-label="Close navigation menu"
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] lg:hidden"
+            onClick={() => setSidebarVisible(false)}
+          />
+        ) : null}
 
         <aside
-          className={`fixed left-4 top-4 z-40 hidden h-[calc(100vh-2rem)] w-[260px] flex-col rounded-[28px] border border-white/10 bg-[color:var(--shell-sidebar-bg)] p-5 shadow-panel backdrop-blur-xl transition-transform duration-300 ease-out lg:flex ${
-            sidebarVisible ? "translate-x-0" : "-translate-x-[calc(100%+1.5rem)]"
+          className={`fixed left-4 top-4 z-40 h-[calc(100vh-2rem)] w-[260px] flex-col rounded-[28px] border border-white/10 bg-[color:var(--shell-sidebar-bg)] p-5 shadow-panel backdrop-blur-xl transition-transform duration-300 ease-out ${
+            shouldShowPersistentSidebar
+              ? "translate-x-0 lg:flex"
+              : `${sidebarVisible ? "translate-x-0" : "-translate-x-[calc(100%+1.5rem)]"} lg:flex`
           }`}
-          onMouseEnter={() => setSidebarVisible(true)}
-          onMouseLeave={() => setSidebarVisible(false)}
+          onMouseEnter={() => {
+            if (navigationMode === "drawer") {
+              setSidebarVisible(true);
+            }
+          }}
+          onMouseLeave={() => {
+            if (navigationMode === "drawer") {
+              setSidebarVisible(false);
+            }
+          }}
         >
-          <div className="mb-8">
+          <div className="mb-8 flex items-start justify-between gap-3">
             <BrandLogo href="/dashboard" size={52} className="mb-4" />
+            {navigationMode === "drawer" ? (
+              <button
+                type="button"
+                aria-label="Close navigation menu"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-primary lg:hidden"
+                onClick={() => setSidebarVisible(false)}
+              >
+                <X size={18} />
+              </button>
+            ) : null}
+          </div>
+
+          <div className="mb-8">
             <h1 className="text-[26px] font-bold leading-tight text-[color:var(--text-primary)]">Developer Simulation</h1>
           </div>
 
@@ -79,12 +112,24 @@ export function DashboardShell({
           </nav>
         </aside>
 
-        <div className="p-4 lg:p-4">
+        <div className={`p-4 lg:p-4 ${shouldShowPersistentSidebar ? "lg:pl-[292px]" : "lg:pl-4"}`}>
           <header className="section-card mb-6 rounded-[28px]">
-            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-[26px] font-bold tracking-tight text-primary">{title}</h2>
-                {subtitle ? <p className="mt-1 text-[15px] leading-6 text-secondary">{subtitle}</p> : null}
+            <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-start gap-4">
+                {navigationMode === "drawer" ? (
+                  <button
+                    type="button"
+                    aria-label="Open navigation menu"
+                    className="mt-1 inline-flex h-11 w-11 flex-none items-center justify-center rounded-2xl border border-white/10 bg-[color:var(--shell-sidebar-bg)] text-primary shadow-panel backdrop-blur-xl"
+                    onClick={() => setSidebarVisible(true)}
+                  >
+                    <Menu size={20} />
+                  </button>
+                ) : null}
+                <div>
+                  <h2 className="text-[26px] font-bold tracking-tight text-primary">{title}</h2>
+                  {subtitle ? <p className="mt-1 text-[15px] leading-6 text-secondary">{subtitle}</p> : null}
+                </div>
               </div>
               <div className="flex flex-col items-stretch gap-4 md:items-end">
                 {rightSlot}

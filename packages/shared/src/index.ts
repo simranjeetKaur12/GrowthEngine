@@ -17,6 +17,64 @@ export interface IssueRecord {
   url: string;
 }
 
+export interface GuidedIssueContext {
+  what_is_broken: string;
+  where_to_fix: string[];
+  hint: string;
+  expected_outcome: string;
+}
+
+export type TicketType = "bug" | "feature" | "improvement";
+export type TicketPriority = "low" | "medium" | "high";
+export type TicketStatus = "todo" | "in_progress" | "in_review" | "done";
+
+export interface TicketBriefing {
+  what_is_broken: string;
+  where_to_fix: string[];
+  hint: string;
+  expected_outcome: string;
+  acceptance_criteria: string[];
+}
+
+export interface IterativeAnalyzerFeedback {
+  status: "progress" | "almost" | "correct";
+  what_you_did_right: string[];
+  what_to_improve: string[];
+  suggested_focus_area: string;
+  confidence: number;
+  summary: string;
+}
+
+export interface FinalReviewFeedback {
+  correctness_score: number;
+  code_quality: number;
+  edge_case_handling: number;
+  final_verdict: "approved" | "needs_work";
+  strengths: string[];
+  weaknesses: string[];
+  improvements: string[];
+  confidence_score: number;
+  summary: string;
+}
+
+export interface TicketRecord {
+  id: string;
+  title: string;
+  description: string;
+  type: TicketType;
+  priority: TicketPriority;
+  status: TicketStatus;
+  repo: string;
+  related_issue_id: string;
+  assigned_to: string;
+  created_at: string;
+  metadata?: {
+    briefing?: TicketBriefing;
+    latest_iterative_feedback?: IterativeAnalyzerFeedback;
+    latest_final_review?: FinalReviewFeedback;
+  };
+}
+
 export interface ClassifiedIssue extends IssueRecord {
   difficulty: Difficulty;
   techStack: TechStack[];
@@ -27,6 +85,7 @@ export interface ClassifiedIssue extends IssueRecord {
   scenarioBody?: string;
   learningObjectives?: string[];
   acceptanceCriteria?: string[];
+  guided_context?: GuidedIssueContext;
 }
 
 export interface SubmissionPayload {
@@ -43,6 +102,32 @@ export interface EvaluationPayload {
   stderr?: string;
   compileOutput?: string;
   expectedOutputMatch?: boolean | null;
+}
+
+export interface EvaluationExtendedFeedback {
+  score: number;
+  confidence: number;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
+  edge_cases: string[];
+}
+
+export type IssueAnalysisStatus = "in_progress" | "likely_solved";
+
+export interface IssueAnalysisFeedback {
+  strengths: string[];
+  issues: string[];
+  suggestions: string[];
+}
+
+export interface IssueAnalysisResult {
+  status: IssueAnalysisStatus;
+  feedback: IssueAnalysisFeedback;
+  guidance: string;
+  confidence: number;
+  summary: string;
 }
 
 export type SimulationStatus =
@@ -161,7 +246,15 @@ export interface UserSettings {
   updatedAt: string;
 }
 
-export type GrowthPathSkill = "python" | "web-development" | "machine-learning";
+export type GrowthPathSkill =
+  | "python"
+  | "web-development"
+  | "machine-learning"
+  | "ai-engineering"
+  | "data-engineering"
+  | "cloud-devops"
+  | "cybersecurity"
+  | "mobile-development";
 export type GrowthPathDifficulty = "foundation" | "build" | "ship";
 export type GrowthPathDayStatus = "locked" | "available" | "in_review" | "completed";
 export type GrowthPathIntensity = "steady" | "stretch" | "reset";

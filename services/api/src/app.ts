@@ -8,6 +8,7 @@ import { progressRouter } from "./routes/progress";
 import { problemsRouter } from "./routes/problems";
 import { simulationRouter } from "./routes/simulations";
 import { submissionRouter } from "./routes/submissions";
+import { ticketRouter } from "./routes/tickets";
 import { usersRouter } from "./routes/users";
 
 export function createApp() {
@@ -28,6 +29,7 @@ export function createApp() {
   app.use("/api/progress", progressRouter);
   app.use("/api/users", usersRouter);
   app.use("/api/growth-paths", growthPathsRouter);
+  app.use("/api/tickets", ticketRouter);
 
   return app;
 }

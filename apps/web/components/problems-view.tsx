@@ -71,13 +71,25 @@ export function ProblemsView() {
         <section className="workspace-card space-y-6">
           <div className="toolbar-panel">
             <div className="toolbar-group">
-              <select value={difficulty} onChange={(event) => setDifficulty(event.target.value)} className="toolbar-select">
+              <select
+                value={difficulty}
+                onChange={(event) => setDifficulty(event.target.value)}
+                className="toolbar-select"
+                aria-label="Filter by difficulty"
+                title="Filter by difficulty"
+              >
                 <option value="">Difficulty</option>
                 <option value="beginner">Easy</option>
                 <option value="intermediate">Medium</option>
                 <option value="advanced">Hard</option>
               </select>
-              <select value={stack} onChange={(event) => setStack(event.target.value)} className="toolbar-select">
+              <select
+                value={stack}
+                onChange={(event) => setStack(event.target.value)}
+                className="toolbar-select"
+                aria-label="Filter by tech stack"
+                title="Filter by tech stack"
+              >
                 <option value="">Tech Stack</option>
                 <option value="react">React</option>
                 <option value="nodejs">Node.js</option>
@@ -89,7 +101,13 @@ export function ProblemsView() {
             </div>
 
             <div className="toolbar-group">
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} className="toolbar-select">
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                className="toolbar-select"
+                aria-label="Sort issue cards"
+                title="Sort issue cards"
+              >
                 <option value="recent">Most recent</option>
                 <option value="difficulty">Most difficult</option>
                 <option value="attempts">Most attempted</option>
@@ -98,7 +116,7 @@ export function ProblemsView() {
                 <input
                   value={repository}
                   onChange={(event) => setRepository(event.target.value)}
-                  placeholder="vercel/next.js"
+                  placeholder="owner/repo or https://github.com/owner/repo"
                   className="ui-input w-full md:w-56"
                 />
                 <button className="ui-button whitespace-nowrap" onClick={handleIngest} disabled={loading}>

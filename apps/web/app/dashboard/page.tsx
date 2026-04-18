@@ -102,6 +102,7 @@ export default function DashboardPage() {
     <DashboardShell
       title="Dashboard"
       subtitle="Your authenticated home for developer simulations, feedback loops, and contribution readiness"
+      navigationMode="sidebar"
       rightSlot={<span className="badge status-review border">{session?.user ? "Live session" : "Demo session"}</span>}
     >
       <div className="space-y-6">

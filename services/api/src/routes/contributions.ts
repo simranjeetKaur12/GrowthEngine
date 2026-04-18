@@ -74,8 +74,9 @@ contributionRouter.post("/start", async (req: AuthenticatedRequest, res) => {
         "Fork the repository",
         "Clone it locally",
         "Create a new branch",
-        "Apply the fix",
-        "Commit and push",
+        "Apply the changes",
+        "Write the commit message",
+        "Push the branch",
         "Open a pull request"
       ],
       draft

@@ -9,8 +9,10 @@ export interface EvaluationResult {
   correctness: "pass" | "fail" | "partial";
   summary: string;
   strengths: string[];
+  weaknesses: string[];
   risks: string[];
   suggestions: string[];
+  edge_cases: string[];
   bugs: string[];
   improvements: string[];
   optimization: string[];
@@ -68,12 +70,14 @@ function fallbackEvaluation(input: EvaluationPayload): EvaluationResult {
       correctness: "fail",
       summary: "Execution failed. Fix runtime or compilation issues first.",
       strengths: ["Submission was executed in sandbox"],
+      weaknesses: ["Execution produced runtime or compilation errors."],
       risks: [input.stderr ?? input.compileOutput ?? "Unknown execution issue"],
       suggestions: [
         "Reproduce the failing case locally with the same input.",
         "Add guards for null, empty, and invalid inputs.",
         "Write small unit tests before resubmitting."
       ],
+      edge_cases: ["Null or malformed input handling"],
       bugs: [input.stderr ?? input.compileOutput ?? "Unknown execution issue"],
       improvements: [
         "Add guards for null, empty, and invalid inputs.",
@@ -93,12 +97,14 @@ function fallbackEvaluation(input: EvaluationPayload): EvaluationResult {
       ? "Submission ran successfully with output. Validate against edge cases before PR."
       : "Submission executed but output is empty; expected behavior should be reviewed.",
     strengths: ["Code executes without sandbox errors"],
+    weaknesses: hasOutput ? [] : ["Output path may be missing or incorrect"],
     risks: hasOutput ? [] : ["Output path may be missing or incorrect"],
     suggestions: [
       "Add tests for empty input, malformed input, and large payloads.",
       "Document algorithm complexity and tradeoffs.",
       "Match coding style and conventions from the target repository."
     ],
+    edge_cases: ["Empty input", "Malformed input", "Large payload handling"],
     bugs: hasOutput ? [] : ["Output path may be missing or incorrect"],
     improvements: [
       "Add tests for empty input, malformed input, and large payloads.",
@@ -130,8 +136,10 @@ export async function evaluateSubmission(input: EvaluationPayload): Promise<Eval
       correctness: llmResult.verdict === "review" ? "partial" : llmResult.verdict,
       summary: llmResult.summary,
       strengths: llmResult.strengths,
+      weaknesses: llmResult.risks,
       risks: llmResult.risks,
       suggestions: llmResult.suggestions,
+      edge_cases: llmResult.risks,
       bugs: llmResult.risks,
       improvements: llmResult.suggestions,
       optimization: llmResult.strengths,

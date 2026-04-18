@@ -1,20 +1,12 @@
 "use client";
 
 import {
-  AlertTriangle,
   ArrowUpRight,
   Bug,
   CheckCircle2,
   CircleDashed,
-  ExternalLink,
-  GitBranchPlus,
-  GitCommitHorizontal,
-  GitFork,
-  GitPullRequestArrow,
-  Lightbulb,
-  Rocket,
-  TerminalSquare,
-  XCircle
+  ClipboardList,
+  Lightbulb
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -22,24 +14,26 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
-import type { ClassifiedIssue } from "@growthengine/shared";
+import type {
+  ClassifiedIssue,
+  FinalReviewFeedback,
+  IssueAnalysisResult,
+  IterativeAnalyzerFeedback,
+  TicketRecord
+} from "@growthengine/shared";
 
 import {
-  attachContributionPr,
-  evaluateSubmission,
+  completeTicket,
+  createTicket,
   executeSubmission,
   fetchCurrentSimulation,
-  fetchContributionHistory,
   fetchIssueById,
   fetchSubmissionHistory,
+  startTicket,
   startSimulation,
-  startContributionGuide,
-  type ContributionDraft,
-  type ContributionGuideRecord,
   type SubmissionHistoryItem
 } from "../../../lib/api";
 import { DashboardShell } from "../../../components/dashboard-shell";
-import { GitHubMark } from "../../../components/social-icons";
 import { supabaseBrowser } from "../../../lib/supabase-browser";
 import { useTheme } from "../../../components/theme-provider";
 
@@ -47,12 +41,25 @@ const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false
 });
 
+const featureFlags = {
+  companyWorkflow: process.env.NEXT_PUBLIC_ENABLE_COMPANY_WORKFLOW !== "false",
+  ticketSystem: process.env.NEXT_PUBLIC_ENABLE_TICKET_SYSTEM !== "false",
+  iterativeAnalyzer: process.env.NEXT_PUBLIC_ENABLE_ITERATIVE_AI_ANALYZER !== "false"
+};
+
 const languageOptions = [
   { id: 63, label: "JavaScript (Node.js)", monaco: "javascript" },
   { id: 71, label: "Python", monaco: "python" },
   { id: 62, label: "Java", monaco: "java" },
   { id: 54, label: "C++", monaco: "cpp" }
 ] as const;
+
+type WorkspaceFileEntry = {
+  path: string;
+  language: string;
+  originalContent: string;
+  content: string;
+};
 
 function starterCode(languageId: number) {
   switch (languageId) {
@@ -109,20 +116,145 @@ function starterCode(languageId: number) {
   }
 }
 
-function toStatusTone(verdict?: "pass" | "fail" | "review" | null) {
-  if (verdict === "pass") return "status-pass";
-  if (verdict === "fail") return "status-fail";
-  return "status-review";
+function inferLanguageFromPath(path: string) {
+  const lower = path.toLowerCase();
+  if (lower.endsWith(".tsx") || lower.endsWith(".ts")) return "typescript";
+  if (lower.endsWith(".jsx") || lower.endsWith(".js")) return "javascript";
+  if (lower.endsWith(".py")) return "python";
+  if (lower.endsWith(".java")) return "java";
+  if (lower.endsWith(".cpp") || lower.endsWith(".cc") || lower.endsWith(".cxx")) return "cpp";
+  if (lower.endsWith(".css")) return "css";
+  if (lower.endsWith(".json")) return "json";
+  return "plaintext";
 }
 
-type ExecuteResult = {
-  submissionId: string;
-  expectedOutputMatch: boolean | null;
-  stdout: string | null;
-  stderr: string | null;
-  compile_output: string | null;
-  status: { id: number; description: string };
-};
+function templateForPath(path: string, issue: ClassifiedIssue, fallbackSource: string) {
+  const language = inferLanguageFromPath(path);
+
+  if (language === "typescript" || language === "javascript") {
+    return [
+      `// Issue: ${issue.title}`,
+      "export function applyFix(input: unknown) {",
+      "  // Implement the fix here",
+      "  return input;",
+      "}"
+    ].join("\n");
+  }
+
+  if (language === "python") {
+    return [
+      `# Issue: ${issue.title}`,
+      "def apply_fix(input_data):",
+      "    # Implement the fix here",
+      "    return input_data"
+    ].join("\n");
+  }
+
+  if (language === "css") {
+    return [
+      `/* Issue: ${issue.title} */`,
+      ".fix-target {",
+      "  /* Implement styling fix */",
+      "}"
+    ].join("\n");
+  }
+
+  return fallbackSource;
+}
+
+function getFallbackGuidedContext(issue: ClassifiedIssue) {
+  return {
+    what_is_broken:
+      issue.scenarioBody?.slice(0, 200) ??
+      issue.body.slice(0, 200) ??
+      `${issue.title} is causing behavior that needs a targeted fix.`,
+    where_to_fix: issue.techStack.includes("react")
+      ? ["src/components/IssueView.tsx", "src/pages/issue.tsx"]
+      : issue.techStack.includes("nodejs")
+        ? ["src/routes/issues.ts", "src/services/issue-service.ts"]
+        : ["solution/main.py", "solution/helpers.py"],
+    hint: issue.learningObjectives?.[0] ?? "Start from the most likely file and patch the smallest logic branch first.",
+    expected_outcome:
+      issue.acceptanceCriteria?.[0] ?? "After the fix, the issue behavior should be resolved with no obvious regressions."
+  };
+}
+
+function buildWorkspaceSeed(issue: ClassifiedIssue, languageId: number): WorkspaceFileEntry[] {
+  const base = starterCode(languageId);
+
+  const guidedPaths: string[] = (issue.guided_context?.where_to_fix ?? getFallbackGuidedContext(issue).where_to_fix)
+    .slice(0, 5)
+    .filter((path: string) => typeof path === "string" && path.trim().length > 0);
+
+  if (guidedPaths.length) {
+    return guidedPaths.map((path: string) => {
+      const content = templateForPath(path, issue, base);
+      return {
+        path,
+        language: inferLanguageFromPath(path),
+        originalContent: content,
+        content
+      };
+    });
+  }
+
+  return [
+    {
+      path: "solution/main.py",
+      language: "python",
+      originalContent: base,
+      content: base
+    },
+    {
+      path: "solution/helpers.py",
+      language: "python",
+      originalContent: "def normalize(value: str) -> str:\n    return value.strip()\n",
+      content: "def normalize(value: str) -> str:\n    return value.strip()\n"
+    }
+  ];
+}
+
+function buildSimpleDiff(path: string, originalContent: string, updatedContent: string) {
+  if (originalContent === updatedContent) {
+    return `--- a/${path}\n+++ b/${path}\n`;
+  }
+
+  const before = originalContent.split("\n");
+  const after = updatedContent.split("\n");
+  const lines = [`--- a/${path}`, `+++ b/${path}`];
+  const max = Math.max(before.length, after.length);
+
+  for (let index = 0; index < max; index += 1) {
+    const left = before[index];
+    const right = after[index];
+
+    if (left === right) {
+      continue;
+    }
+
+    if (typeof left === "string") {
+      lines.push(`-${left}`);
+    }
+    if (typeof right === "string") {
+      lines.push(`+${right}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function getStatusLabel(
+  hasSession: boolean,
+  hasCodeEdits: boolean,
+  analysis: IssueAnalysisResult | null,
+  completed: boolean
+) {
+  if (completed) return "Completed";
+  if (!hasSession) return "Not Started";
+  if (analysis?.confidence && analysis.confidence >= 0.85) return "Ready for Submission";
+  if (hasCodeEdits || analysis) return "In Progress";
+  return "Not Started";
+}
 
 export default function IssueSolvePage({ params }: { params: { id: string } }) {
   const issueId = Number(params.id);
@@ -132,56 +264,38 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
   const [issue, setIssue] = useState<ClassifiedIssue | null>(null);
   const [history, setHistory] = useState<SubmissionHistoryItem[]>([]);
   const [session, setSession] = useState<Session | null>(null);
-  const [contributions, setContributions] = useState<ContributionGuideRecord[]>([]);
   const [simulationSession, setSimulationSession] = useState<{
     id: string;
     status: "not_started" | "in_progress" | "ready_to_contribute" | "completed";
     totalAttempts: number;
     contributionReady: boolean;
   } | null>(null);
-  const [activeGuide, setActiveGuide] = useState<ContributionGuideRecord | null>(null);
-  const [guideSteps, setGuideSteps] = useState<string[]>([]);
-  const [contributionDraft, setContributionDraft] = useState<ContributionDraft | null>(null);
-  const [prUrl, setPrUrl] = useState("");
-  const [prStatus, setPrStatus] = useState<"opened" | "in_review" | "changes_requested" | "merged" | "closed">("opened");
-  const [contextTab, setContextTab] = useState<"scenario" | "requirements" | "source">("scenario");
   const [leftPanelPercent, setLeftPanelPercent] = useState(40);
   const [languageId, setLanguageId] = useState(71);
   const [sourceCode, setSourceCode] = useState(starterCode(71));
+  const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFileEntry[]>([]);
+  const [activeFilePath, setActiveFilePath] = useState<string>("");
   const [stdin, setStdin] = useState("");
   const [expectedOutput, setExpectedOutput] = useState("");
-  const [showHint, setShowHint] = useState(false);
-  const [execution, setExecution] = useState<ExecuteResult | null>(null);
-  const [evaluation, setEvaluation] = useState<{
-    verdict: "pass" | "fail" | "review";
-    summary: string;
-    strengths: string[];
-    risks: string[];
-    suggestions: string[];
-    confidence: number;
-    modelName: string;
-  } | null>(null);
+  const [analysis, setAnalysis] = useState<IssueAnalysisResult | null>(null);
+  const [iterativeFeedback, setIterativeFeedback] = useState<IterativeAnalyzerFeedback | null>(null);
+  const [finalReview, setFinalReview] = useState<FinalReviewFeedback | null>(null);
+  const [ticket, setTicket] = useState<TicketRecord | null>(null);
   const [message, setMessage] = useState("");
   const [authReady, setAuthReady] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [isEvaluating, setIsEvaluating] = useState(false);
   const [isStartingSimulation, setIsStartingSimulation] = useState(false);
-  const [isStartingGuide, setIsStartingGuide] = useState(false);
-  const [isSavingPr, setIsSavingPr] = useState(false);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   const selectedLanguage = useMemo(
     () => languageOptions.find((option) => option.id === languageId) ?? languageOptions[1],
     [languageId]
   );
 
-  const aiCleanSummary = useMemo(() => {
-    if (!issue) {
-      return "This issue requires an implementation update in the target repository.";
-    }
-
-    const scenarioText = issue.scenarioBody ?? issue.body;
-    return scenarioText.length > 320 ? `${scenarioText.slice(0, 320)}...` : scenarioText;
-  }, [issue]);
+  const activeWorkspaceFile = useMemo(
+    () => workspaceFiles.find((file) => file.path === activeFilePath) ?? null,
+    [workspaceFiles, activeFilePath]
+  );
 
   const splitClass = useMemo(() => {
     if (leftPanelPercent <= 33) return "xl:grid-cols-[32%_68%]";
@@ -191,58 +305,78 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
     return "xl:grid-cols-[52%_48%]";
   }, [leftPanelPercent]);
 
-  const contributionCommands = useMemo(() => {
-    if (!issue) {
-      return "";
-    }
+  const guidedContext = useMemo(
+    () => (issue ? issue.guided_context ?? getFallbackGuidedContext(issue) : null),
+    [issue]
+  );
 
-    const branchName = activeGuide?.branch_name ?? `fix/issue-${issue.id}`;
-    const repoUrl = `https://github.com/${issue.repositoryFullName}.git`;
+  const hasCodeEdits = useMemo(
+    () => workspaceFiles.some((file) => file.content !== file.originalContent),
+    [workspaceFiles]
+  );
 
-    return [
-      "# fork the repository in GitHub first",
-      `git clone ${repoUrl}`,
-      `cd ${issue.repositoryFullName.split("/")[1] ?? "repo"}`,
-      "git remote rename origin upstream",
-      `git remote add origin https://github.com/<your-username>/${issue.repositoryFullName.split("/")[1] ?? "repo"}.git`,
-      "git fetch upstream",
-      `git checkout -b ${branchName} upstream/main`,
-      "# apply your fix, then run tests locally",
-      "git add .",
-      `git commit -m "Fix issue #${issue.id}: ${issue.title}"`,
-      `git push -u origin ${branchName}`
-    ].join("\n");
-  }, [activeGuide?.branch_name, issue]);
+  const workflowSteps = useMemo(
+    () => {
+      if (!ticket) {
+        return [
+          { key: "understand", label: "UNDERSTAND", active: Boolean(issue) },
+          { key: "edit", label: "IN_PROGRESS", active: hasCodeEdits },
+          { key: "feedback", label: "IN_REVIEW", active: Boolean(iterativeFeedback || analysis) },
+          { key: "done", label: "DONE", active: Boolean(finalReview) }
+        ];
+      }
 
-  const contributionSteps = guideSteps.length
-    ? guideSteps
-    : [
-        "Fork the repository",
-        "Clone it locally",
-        "Create a new branch",
-        "Apply the fix",
-        "Commit and push",
-        "Open a pull request"
+      return [
+        {
+          key: "todo",
+          label: "TODO",
+          active: ticket.status === "todo" || ticket.status === "in_progress" || ticket.status === "in_review" || ticket.status === "done"
+        },
+        {
+          key: "in_progress",
+          label: "IN_PROGRESS",
+          active: ticket.status === "in_progress" || ticket.status === "in_review" || ticket.status === "done"
+        },
+        {
+          key: "in_review",
+          label: "IN_REVIEW",
+          active: ticket.status === "in_review" || ticket.status === "done"
+        },
+        { key: "done", label: "DONE", active: ticket.status === "done" }
       ];
+    },
+    [ticket, issue, hasCodeEdits, iterativeFeedback, analysis, finalReview]
+  );
 
-  const contributionUnlocked = Boolean(
-    execution && (execution.expectedOutputMatch === true || evaluation?.verdict === "pass" || evaluation?.verdict === "review")
+  const statusLabel = useMemo(
+    () =>
+      getStatusLabel(
+        Boolean(simulationSession),
+        hasCodeEdits,
+        analysis,
+        simulationSession?.status === "completed"
+      ),
+    [simulationSession, hasCodeEdits, analysis]
   );
 
   async function loadIssueAndHistory(accessToken?: string) {
-    const [issueData, historyData, contributionItems, sessionResult] = await Promise.all([
+    const [issueData, historyData, sessionResult] = await Promise.all([
       fetchIssueById(issueId),
       fetchSubmissionHistory(issueId, accessToken, 20),
-      fetchContributionHistory({ accessToken, issueId }),
       fetchCurrentSimulation({ accessToken, issueId })
     ]);
 
     setIssue(issueData);
     setHistory(historyData);
-    setContributions(contributionItems);
     setSimulationSession(sessionResult.session);
-    if (contributionItems.length) {
-      setActiveGuide(contributionItems[0]);
+
+    if (featureFlags.companyWorkflow && featureFlags.ticketSystem) {
+      try {
+        const ticketResponse = await createTicket({ accessToken, issueId });
+        setTicket(ticketResponse.ticket);
+      } catch {
+        setTicket(null);
+      }
     }
   }
 
@@ -287,46 +421,25 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
   }, [authReady, session?.access_token, issueId]);
 
   useEffect(() => {
-    if (!Number.isFinite(issueId)) {
+    if (!issue) {
       return;
     }
 
-    fetchSubmissionHistory(issueId, session?.access_token, 20)
-      .then((items) => setHistory(items))
-      .catch((error) => {
-        setMessage(error instanceof Error ? error.message : "Failed to load history");
-      });
-  }, [issueId, session?.access_token]);
+    const seededFiles = buildWorkspaceSeed(issue, languageId);
+    setWorkspaceFiles(seededFiles);
+    setActiveFilePath(seededFiles[0]?.path ?? "");
+    setSourceCode(seededFiles[0]?.content ?? starterCode(languageId));
+  }, [issue?.id]);
 
   async function refreshHistory() {
     const nextHistory = await fetchSubmissionHistory(issueId, session?.access_token, 20);
     setHistory(nextHistory);
   }
 
-  async function refreshContributionHistory() {
-    const items = await fetchContributionHistory({ accessToken: session?.access_token, issueId });
-    setContributions(items);
-    if (items.length) {
-      setActiveGuide(items[0]);
-      setPrUrl(items[0].pr_url ?? "");
-    }
-  }
-
-  async function refreshSimulationSession() {
-    const result = await fetchCurrentSimulation({ accessToken: session?.access_token, issueId });
-    setSimulationSession(result.session);
-  }
-
-  useEffect(() => {
-    if (activeGuide?.pr_url) {
-      setPrUrl(activeGuide.pr_url);
-    }
-  }, [activeGuide?.pr_url]);
-
   async function handleExecute() {
     setIsRunning(true);
-    setMessage("Running code in Judge0 sandbox...");
-    setEvaluation(null);
+    setMessage("Running AI analyzer on your changes...");
+    setAnalysis(null);
 
     try {
       if (!simulationSession?.id) {
@@ -341,12 +454,32 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
         languageId,
         sourceCode,
         stdin,
-        expectedOutput
+        expectedOutput,
+        evaluationMode:
+          featureFlags.companyWorkflow && featureFlags.iterativeAnalyzer
+            ? "iterative_feedback"
+            : undefined,
+        workspace: issue
+          ? {
+              repository: issue.repositoryFullName,
+              issueUrl: issue.url,
+              notes: "Workspace diff captured from browser IDE",
+              files: workspaceFiles.map((file) => ({
+                path: file.path,
+                language: file.language,
+                originalContent: file.originalContent,
+                updatedContent: file.content,
+                diff: buildSimpleDiff(file.path, file.originalContent, file.content)
+              }))
+            }
+          : undefined
       });
 
-      setExecution(result);
+      setAnalysis(result.analysis ?? null);
+      setIterativeFeedback(result.iterativeFeedback ?? null);
       setSimulationSession(result.simulationSession);
-      setMessage("Execution completed.");
+      setFinalReview(null);
+      setMessage("AI feedback generated. Iterate and improve.");
       await refreshHistory();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Execution failed");
@@ -355,95 +488,104 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
     }
   }
 
-  async function handleEvaluate() {
-    if (!execution?.submissionId) {
-      setMessage("Run execution first to create a submission.");
+  async function handleSubmitForReview() {
+    if (!simulationSession?.id) {
+      setMessage("Start the simulation before submitting for review.");
       return;
     }
 
-    setIsEvaluating(true);
-    setMessage("Requesting AI engineering review...");
+    setIsSubmittingReview(true);
+    setMessage("Submitting for senior engineer review...");
 
     try {
-      if (!simulationSession?.id) {
-        setMessage("Start the simulation before evaluation.");
-        return;
+      const result = await executeSubmission({
+        accessToken: session?.access_token,
+        issueId,
+        simulationSessionId: simulationSession.id,
+        languageId,
+        sourceCode,
+        stdin,
+        expectedOutput,
+        evaluationMode: "final_review",
+        workspace: issue
+          ? {
+              repository: issue.repositoryFullName,
+              issueUrl: issue.url,
+              notes: "Workspace diff captured from browser IDE",
+              files: workspaceFiles.map((file) => ({
+                path: file.path,
+                language: file.language,
+                originalContent: file.originalContent,
+                updatedContent: file.content,
+                diff: buildSimpleDiff(file.path, file.originalContent, file.content)
+              }))
+            }
+          : undefined
+      });
+
+      setFinalReview(result.finalReview ?? null);
+      setSimulationSession(result.simulationSession);
+
+      if (ticket && result.finalReview && featureFlags.companyWorkflow && featureFlags.ticketSystem) {
+        const approved = result.finalReview.final_verdict === "approved";
+        const updatedTicket = await completeTicket({
+          accessToken: session?.access_token,
+          ticketId: ticket.id,
+          approved,
+          iterativeFeedback: iterativeFeedback ?? undefined,
+          finalReview: result.finalReview
+        });
+        setTicket(updatedTicket.ticket);
       }
 
-      const result = await evaluateSubmission({
-        accessToken: session?.access_token,
-        submissionId: execution.submissionId,
-        simulationSessionId: simulationSession.id
-      });
-      setEvaluation(result.evaluation);
-      setSimulationSession(result.simulationSession);
-      setMessage("Evaluation completed.");
+      setMessage(
+        result.finalReview?.final_verdict === "approved"
+          ? "Review approved. You can complete simulation and open contribution flow."
+          : "Review completed. Address feedback and submit again."
+      );
       await refreshHistory();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Evaluation failed");
+      setMessage(error instanceof Error ? error.message : "Failed to submit for review");
     } finally {
-      setIsEvaluating(false);
+      setIsSubmittingReview(false);
     }
   }
 
-  async function handleStartContributionGuide() {
-    if (!issue || !simulationSession?.id) {
-      setMessage("Start the simulation and load the issue before starting contribution guide.");
+  async function handleStartTicket() {
+    if (!ticket) {
+      setMessage("Ticket is unavailable. Falling back to simulation flow.");
       return;
     }
 
-    setIsStartingGuide(true);
-    setMessage("Creating contribution guide...");
-
     try {
-      const result = await startContributionGuide({
+      const result = await startTicket({
         accessToken: session?.access_token,
-        issueId: issue.id,
-        simulationSessionId: simulationSession.id,
-        repositoryFullName: issue.repositoryFullName,
-        issueUrl: issue.url,
-        issueTitle: issue.title
+        ticketId: ticket.id
       });
-
-      setActiveGuide(result.guide);
-      setGuideSteps(result.steps);
-      setContributionDraft(result.draft);
-      setMessage("Contribution guide created. Follow the steps and attach your PR URL.");
-      await refreshContributionHistory();
-      await refreshSimulationSession();
+      setTicket(result.ticket);
+      setMessage("Ticket moved to IN_PROGRESS.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Failed to start contribution guide");
-    } finally {
-      setIsStartingGuide(false);
+      setMessage(error instanceof Error ? error.message : "Failed to start ticket");
     }
   }
 
-  async function handleAttachPr() {
-    if (!activeGuide?.id || !prUrl) {
-      setMessage("Start a guide and provide a PR URL first.");
+  async function handleCompleteSimulation() {
+    if (!analysis && !finalReview) {
+      setMessage("Run AI feedback and submit for review before completing the simulation.");
       return;
     }
 
-    setIsSavingPr(true);
-    setMessage("Saving PR link...");
-
-    try {
-      const result = await attachContributionPr({
-        accessToken: session?.access_token,
-        guideId: activeGuide.id,
-        prUrl,
-        prStatus
-      });
-
-      setActiveGuide(result.guide);
-      setMessage("PR URL saved to contribution history.");
-      await refreshContributionHistory();
-      await refreshSimulationSession();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Failed to save PR URL");
-    } finally {
-      setIsSavingPr(false);
+    if ((finalReview?.confidence_score ?? analysis?.confidence ?? 0) < 0.7) {
+      const confirmed = window.confirm(
+        "The analysis confidence is below 70%. Continue to the contribution page anyway?"
+      );
+      if (!confirmed) {
+        return;
+      }
     }
+
+    setMessage("Opening the contribution workflow...");
+    router.push(`/issues/${issueId}/contribution`);
   }
 
   async function handleStartSimulation() {
@@ -472,13 +614,14 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
       <span className="badge status-review border">
         {session?.access_token ? "Authenticated mode" : "Demo mode"}
       </span>
+      <span className="badge status-review border">{statusLabel}</span>
     </div>
   );
 
   return (
     <DashboardShell
       title="Simulation Workspace"
-      subtitle="Resolve this real issue like a production engineer with code execution, mentoring feedback, and contribution tracking"
+      subtitle="Learn, try, get AI feedback, and contribute like a production engineer"
       rightSlot={rightSlot}
     >
       <div className="section-card mb-6 flex flex-wrap items-center gap-3">
@@ -498,224 +641,90 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
       <section className={`grid grid-cols-1 gap-6 ${splitClass}`}>
         <div className="space-y-6">
           <div className="ui-card">
-            <div className="mb-3 flex flex-wrap gap-2">
-              {issue ? (
-                <>
-                  <span
-                    className={`badge ${
-                      issue.difficulty === "beginner"
-                        ? "badge-easy"
-                        : issue.difficulty === "intermediate"
-                          ? "badge-medium"
-                          : "badge-hard"
-                    }`}
-                  >
-                    {issue.difficulty}
-                  </span>
-                  {issue.techStack.map((tag) => (
-                    <span key={tag} className="badge border border-white/15 bg-white/5 text-primary">
-                      {tag}
-                    </span>
-                  ))}
-                </>
-              ) : null}
-            </div>
-
-            <h3 className="text-xl font-semibold text-primary">
-              {issue?.scenarioTitle ?? issue?.title ?? "Loading issue..."}
+            <p className="text-xs uppercase tracking-[0.22em] text-brand-300">Ticket Header</p>
+            <h3 className="mt-3 flex items-center gap-2 text-xl font-semibold text-primary">
+              <ClipboardList size={22} />
+              {ticket?.title ?? issue?.title ?? "Loading ticket..."}
             </h3>
             <p className="mt-2 text-sm leading-6 text-secondary">
-              You are a software engineer assigned to triage and deliver a production-safe fix with
-              testable output and contribution-ready changes.
+              {ticket?.description ?? "Convert this issue into a production-style ticket lifecycle and ship with review confidence."}
             </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={`ui-button-muted ${contextTab === "scenario" ? "ring-2 ring-brand-500/40" : ""}`}
-                onClick={() => setContextTab("scenario")}
-              >
-                Scenario
-              </button>
-              <button
-                type="button"
-                className={`ui-button-muted ${contextTab === "requirements" ? "ring-2 ring-brand-500/40" : ""}`}
-                onClick={() => setContextTab("requirements")}
-              >
-                Requirements
-              </button>
-              <button
-                type="button"
-                className={`ui-button-muted ${contextTab === "source" ? "ring-2 ring-brand-500/40" : ""}`}
-                onClick={() => setContextTab("source")}
-              >
-                Original Issue
-              </button>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              <span className="status-chip status-review border">Priority {ticket?.priority ?? "medium"}</span>
+              <span className="status-chip status-review border">Type {ticket?.type ?? "bug"}</span>
+              <span className="status-chip status-review border">Status {(ticket?.status ?? "todo").replace("_", " ")}</span>
             </div>
-
-            <div className="surface-elevated mt-4 p-4 text-sm leading-6 text-primary">
-              {contextTab === "scenario" ? (
-                <div className="space-y-4">
-                  <p>{aiCleanSummary}</p>
-                  <div className="rounded-2xl border border-brand-400/20 bg-brand-500/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-brand-100">Max Learning Workflow</p>
-                    <p className="mt-2 text-sm leading-6 text-secondary">
-                      Treat this like real engineering work. Study the repository first, understand where the behavior lives,
-                      and only then move into implementation.
-                    </p>
-                    <div className="mt-4 space-y-3">
-                      <div className="step-item">
-                        <span className="step-index">1</span>
-                        <span>Open the GitHub repository and scan the README, contribution docs, and issue thread for context.</span>
-                      </div>
-                      <div className="step-item">
-                        <span className="step-index">2</span>
-                        <span>Explore the codebase structure to find the feature area, related modules, and existing tests.</span>
-                      </div>
-                      <div className="step-item">
-                        <span className="step-index">3</span>
-                        <span>Trace where the current behavior is implemented, then identify the exact place where a fix is most likely needed.</span>
-                      </div>
-                      <div className="step-item">
-                        <span className="step-index">4</span>
-                        <span>Write down the expected behavior, edge cases, and how you will verify the fix before changing code.</span>
-                      </div>
-                      <div className="step-item">
-                        <span className="step-index">5</span>
-                        <span>Only after you understand the flow, use the editor here to implement, test, review, and improve your solution.</span>
-                      </div>
-                    </div>
-                    {issue ? (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <a className="ui-button-muted" href={`https://github.com/${issue.repositoryFullName}`} target="_blank" rel="noreferrer">
-                          Open Repository
-                        </a>
-                        <a className="ui-button-muted" href={issue.url} target="_blank" rel="noreferrer">
-                          Review Original Issue
-                        </a>
-                      </div>
-                    ) : null}
-                  </div>
-                  {issue?.learningObjectives?.length ? (
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted">Learning Objectives</p>
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-secondary">
-                        {issue.learningObjectives.map((objective) => (
-                          <li key={objective}>{objective}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {contextTab === "requirements" ? (
-                issue?.acceptanceCriteria?.length ? (
-                  <ul className="list-disc space-y-1 pl-5">
-                    {issue.acceptanceCriteria.map((criterion) => (
-                      <li key={criterion}>{criterion}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <ul className="list-disc space-y-1 pl-5">
-                    <li>Implement a deterministic, testable fix for the issue.</li>
-                    <li>Handle edge cases and malformed input safely.</li>
-                    <li>Ensure output aligns with expected contract.</li>
-                    <li>Prepare code for upstream PR submission.</li>
-                  </ul>
-                )
-              ) : null}
-              {contextTab === "source" ? (
-                <div className="space-y-2">
-                  <p className="text-secondary">Reference the original issue for full project context:</p>
-                  <a href={issue?.url ?? "#"} target="_blank" rel="noreferrer" className="ui-button-muted inline-flex gap-2">
-                    <ExternalLink size={18} />
-                    View on GitHub
-                  </a>
-                </div>
-              ) : null}
-            </div>
-
-            <details className="surface-elevated mt-4 rounded-xl p-3 text-sm text-secondary">
-              <summary className="cursor-pointer font-semibold text-primary">Expand raw issue details</summary>
-              <p className="mt-3 whitespace-pre-wrap leading-6">{issue?.body ?? "No issue body"}</p>
-            </details>
+            {issue ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <a
+                  className="ui-button-muted"
+                  href={`https://github.com/${issue.repositoryFullName}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open Repository
+                </a>
+                <a className="ui-button-muted" href={issue.url} target="_blank" rel="noreferrer">
+                  Review Original Issue
+                </a>
+              </div>
+            ) : null}
           </div>
 
           <div className="ui-card">
-            <h4 className="flex items-center gap-2 text-lg font-semibold text-primary">
-              <CircleDashed size={22} />
-              AI Review Panel
-            </h4>
-            {evaluation ? (
-              <div className="mt-3 space-y-3 text-sm text-primary">
-                <div>
-                  <span className={`status-chip ${toStatusTone(evaluation.verdict)} gap-1`}>
-                    {evaluation.verdict === "pass" ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
-                    Verdict: {evaluation.verdict.toUpperCase()}
-                  </span>
-                  <span className="status-chip status-review">
-                    Confidence {(evaluation.confidence * 100).toFixed(1)}%
-                  </span>
+            <p className="text-xs uppercase tracking-[0.22em] text-brand-300">AI Briefing Panel</p>
+            {ticket?.metadata?.briefing || guidedContext ? (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="surface-elevated p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted">What is broken</p>
+                  <p className="mt-2 text-sm leading-6 text-secondary">{ticket?.metadata?.briefing?.what_is_broken ?? guidedContext?.what_is_broken}</p>
                 </div>
-                <p>{evaluation.summary}</p>
-                <div className="rounded-xl border border-rose-400/20 bg-rose-500/10 p-3">
-                  <h5 className="mb-1 flex items-center gap-2 font-semibold text-rose-200">
-                    <Bug size={20} />
-                    Bugs
-                  </h5>
-                  <ul className="list-disc space-y-1 pl-5 text-secondary">
-                    {evaluation.risks.length ? (
-                      evaluation.risks.map((item) => <li key={item}>{item}</li>)
-                    ) : (
-                      <li>No critical bug detected from current execution output.</li>
-                    )}
-                  </ul>
+                <div className="surface-elevated p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted">Hint</p>
+                  <p className="mt-2 text-sm leading-6 text-secondary">{ticket?.metadata?.briefing?.hint ?? guidedContext?.hint}</p>
                 </div>
-                <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3">
-                  <h5 className="mb-1 flex items-center gap-2 font-semibold text-blue-200">
-                    <Lightbulb size={20} />
-                    Improvements
-                  </h5>
-                  <ul className="list-disc space-y-1 pl-5 text-secondary">
-                    {evaluation.suggestions.map((item) => (
-                      <li key={item}>{item}</li>
+                <div className="surface-elevated p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted">Where to fix</p>
+                  <ul className="mt-2 space-y-1 text-sm text-secondary">
+                    {(ticket?.metadata?.briefing?.where_to_fix ?? guidedContext?.where_to_fix ?? []).slice(0, 5).map((path: string) => (
+                      <li key={path}>- {path}</li>
                     ))}
                   </ul>
                 </div>
-                <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3">
-                  <h5 className="mb-1 flex items-center gap-2 font-semibold text-amber-200">
-                    <Rocket size={20} />
-                    Optimization
-                  </h5>
-                  <ul className="list-disc space-y-1 pl-5 text-secondary">
-                    {evaluation.strengths.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
+                <div className="surface-elevated p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted">Expected outcome</p>
+                  <p className="mt-2 text-sm leading-6 text-secondary">{ticket?.metadata?.briefing?.expected_outcome ?? guidedContext?.expected_outcome}</p>
                 </div>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-secondary">
-                Run and evaluate your code to receive senior engineer style feedback with bugs,
-                optimizations, and code quality notes.
-              </p>
+              <p className="mt-3 text-sm text-secondary">Loading briefing context...</p>
             )}
           </div>
         </div>
 
         <div className="space-y-6">
           <div className="ui-card">
+            <p className="text-xs uppercase tracking-[0.22em] text-brand-300">Workflow Progress Bar</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {workflowSteps.map((step) => (
+                <div
+                  key={step.key}
+                  className={`rounded-2xl border p-4 text-sm ${step.active ? "border-brand-400/40 bg-brand-500/10 text-primary" : "border-white/10 bg-white/5 text-secondary"}`}
+                >
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted">Ticket State</p>
+                  <p className="mt-2 font-medium">{step.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="ui-card">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h4 className="text-lg font-semibold text-primary">Coding Environment</h4>
               <div className="flex flex-wrap gap-2">
                 {simulationSession ? (
                   <>
-                    <span className="status-chip status-review border">
-                      Status {simulationSession.status.replace(/_/g, " ")}
-                    </span>
-                    <span className="status-chip status-review border">
-                      Attempts {simulationSession.totalAttempts}
-                    </span>
+                    <span className="status-chip status-review border">Attempts {simulationSession.totalAttempts}</span>
                     <select
                       value={languageId}
                       onChange={(event) => setLanguageId(Number(event.target.value))}
@@ -729,7 +738,24 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                         </option>
                       ))}
                     </select>
-                    <button className="ui-button-muted" type="button" onClick={() => setSourceCode(starterCode(languageId))}>
+                    <button
+                      className="ui-button-muted"
+                      type="button"
+                      onClick={() => {
+                        const resetCode = starterCode(languageId);
+                        setSourceCode(resetCode);
+                        setWorkspaceFiles((current) =>
+                          current.map((file) =>
+                            file.path === activeFilePath
+                              ? {
+                                  ...file,
+                                  content: resetCode
+                                }
+                              : file
+                          )
+                        );
+                      }}
+                    >
                       Reset
                     </button>
                   </>
@@ -740,12 +766,43 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
             {simulationSession ? (
               <>
                 <div className="overflow-hidden rounded-2xl border border-white/10">
+                  <div className="border-b border-white/10 bg-slate-950/70 p-2">
+                    <div className="flex flex-wrap gap-2">
+                      {workspaceFiles.map((file, index) => (
+                        <button
+                          key={file.path}
+                          type="button"
+                          className={`ui-button-muted text-xs ${activeFilePath === file.path ? "ring-2 ring-brand-500/40" : ""}`}
+                          onClick={() => {
+                            setActiveFilePath(file.path);
+                            setSourceCode(file.content);
+                          }}
+                        >
+                          {file.path}
+                          {index === 0 ? " (Start here)" : ""}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <MonacoEditor
                     height="460px"
-                    language={selectedLanguage.monaco}
+                    language={activeWorkspaceFile?.language ?? selectedLanguage.monaco}
                     value={sourceCode}
                     theme={mounted && theme === "light" ? "light" : "vs-dark"}
-                    onChange={(value) => setSourceCode(value ?? "")}
+                    onChange={(value) => {
+                      const nextValue = value ?? "";
+                      setSourceCode(nextValue);
+                      setWorkspaceFiles((current) =>
+                        current.map((file) =>
+                          file.path === activeFilePath
+                            ? {
+                                ...file,
+                                content: nextValue
+                              }
+                            : file
+                        )
+                      );
+                    }}
                     options={{
                       minimap: { enabled: false },
                       fontSize: 14,
@@ -759,12 +816,7 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                 <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
                   <label className="grid gap-2 text-xs uppercase tracking-wider text-secondary">
                     Standard Input
-                    <textarea
-                      value={stdin}
-                      onChange={(event) => setStdin(event.target.value)}
-                      rows={4}
-                      className="ui-input"
-                    />
+                    <textarea value={stdin} onChange={(event) => setStdin(event.target.value)} rows={4} className="ui-input" />
                   </label>
                   <label className="grid gap-2 text-xs uppercase tracking-wider text-secondary">
                     Expected Output
@@ -778,71 +830,42 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    className="ui-button-muted"
+                    type="button"
+                    onClick={handleStartTicket}
+                    disabled={!ticket || ticket.status !== "todo"}
+                  >
+                    Start Ticket
+                  </button>
                   <button className="ui-button" type="button" onClick={handleExecute} disabled={isRunning || !sourceCode.trim()}>
                     {isRunning ? "Running..." : "Run Code"}
                   </button>
                   <button
                     className="ui-button-muted"
                     type="button"
-                    onClick={() => setShowHint((value) => !value)}
-                    disabled={!issue?.learningObjectives?.length}
+                    onClick={handleSubmitForReview}
+                    disabled={isSubmittingReview || !sourceCode.trim()}
                   >
-                    {showHint ? "Hide Hint" : "Show Hint"}
+                    {isSubmittingReview ? "Submitting..." : "Submit for Review"}
                   </button>
                   <button
                     className="ui-button-muted"
                     type="button"
-                    onClick={handleEvaluate}
-                    disabled={isEvaluating || !execution?.submissionId}
+                    onClick={handleCompleteSimulation}
+                    disabled={!finalReview && !analysis}
                   >
-                    {isEvaluating ? "Reviewing..." : "Submit Solution"}
+                    Complete Simulation
                   </button>
                   {message ? <span className="text-sm text-brand-200">{message}</span> : null}
                 </div>
-
-                {showHint && issue?.learningObjectives?.length ? (
-                  <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-amber-100">Hint</p>
-                    <p className="mt-2 text-sm leading-6 text-primary">{issue.learningObjectives[0]}</p>
-                  </div>
-                ) : null}
-
-                {execution ? (
-                  <div className="surface-elevated mt-4 p-4">
-                    <div className="mb-2 flex flex-wrap gap-2">
-                      <span className={`status-chip border gap-1 ${execution.status.id === 3 ? "status-pass" : "status-fail"}`}>
-                        {execution.status.id === 3 ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
-                        {execution.status.description}
-                      </span>
-                      <span
-                        className={`status-chip border gap-1 ${
-                          execution.expectedOutputMatch === true
-                            ? "status-pass"
-                            : execution.expectedOutputMatch === false
-                              ? "status-fail"
-                              : "status-review"
-                        }`}
-                      >
-                        {execution.expectedOutputMatch === true ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-                        Expected Output {execution.expectedOutputMatch === null ? "N/A" : execution.expectedOutputMatch ? "Matched" : "Mismatch"}
-                      </span>
-                    </div>
-                    <p className="mb-1 text-xs uppercase tracking-wide text-muted">Console Output</p>
-                    <pre className="code-block">{execution.stdout || "<no stdout>"}</pre>
-                    {execution.stderr ? <pre className="code-block">stderr: {execution.stderr}</pre> : null}
-                    {execution.compile_output ? (
-                      <pre className="code-block">compile: {execution.compile_output}</pre>
-                    ) : null}
-                  </div>
-                ) : null}
               </>
             ) : (
               <div className="surface-subtle p-6">
                 <p className="text-xs uppercase tracking-[0.22em] text-brand-300">Simulation Workspace</p>
                 <h5 className="mt-3 text-2xl font-semibold text-primary">Start Simulation</h5>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-secondary">
-                  Initialize a tracked session for this issue, unlock the coding environment, and
-                  capture your attempts, AI reviews, and contribution readiness from one workflow.
+                  Initialize a tracked session for this issue, unlock the coding environment, and capture your attempts and AI reviews.
                 </p>
                 <div className="mt-6 flex flex-wrap items-center gap-3">
                   <button className="ui-button" type="button" onClick={handleStartSimulation} disabled={isStartingSimulation}>
@@ -858,208 +881,117 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
             )}
           </div>
 
-          {contributionUnlocked ? (
-            <div className="ui-card">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-brand-300">Guided Contribution Mode</p>
-                  <h4 className="mt-2 text-xl font-semibold text-primary">Ready to Contribute?</h4>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-secondary">
-                    Use this issue as a bridge from simulation to real-world contribution. Follow the
-                    workflow below, apply your validated fix, and open a PR upstream.
-                  </p>
-                </div>
+          <div className="ui-card">
+            <h4 className="flex items-center gap-2 text-lg font-semibold text-primary">
+              <CircleDashed size={22} />
+              AI Feedback Panel
+            </h4>
+            {finalReview ? (
+              <div className="mt-3 space-y-3 text-sm text-primary">
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    className="ui-button"
-                    type="button"
-                    onClick={handleStartContributionGuide}
-                    disabled={isStartingGuide || !issue || !simulationSession}
-                  >
-                    <GitBranchPlus size={18} />
-                    {isStartingGuide ? "Preparing..." : "Prepare Guide"}
-                  </button>
-                  {issue ? (
-                    <a className="ui-button-muted" href={issue.url} target="_blank" rel="noreferrer">
-                      <ArrowUpRight size={18} />
-                      View Issue on GitHub
-                    </a>
-                  ) : null}
-                  {issue ? (
-                    <Link className="ui-button-muted" href={`/issues/${issue.id}/contribution`}>
-                      Open Contribution Page
-                    </Link>
-                  ) : null}
+                  <span className={`status-chip ${finalReview.final_verdict === "approved" ? "status-pass" : "status-review"} gap-1`}>
+                    {finalReview.final_verdict === "approved" ? <CheckCircle2 size={20} /> : <Bug size={20} />}
+                    {finalReview.final_verdict === "approved" ? "Approved" : "Needs Work"}
+                  </span>
+                  <span className="status-chip status-review">Confidence {(finalReview.confidence_score * 100).toFixed(1)}%</span>
+                </div>
+                <p className="text-secondary">{finalReview.summary}</p>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted">Correctness</p>
+                    <p className="mt-1 text-lg font-semibold text-primary">{finalReview.correctness_score.toFixed(1)}/10</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted">Code Quality</p>
+                    <p className="mt-1 text-lg font-semibold text-primary">{finalReview.code_quality.toFixed(1)}/10</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted">Edge Cases</p>
+                    <p className="mt-1 text-lg font-semibold text-primary">{finalReview.edge_case_handling.toFixed(1)}/10</p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+                  <h5 className="mb-1 flex items-center gap-2 font-semibold text-emerald-200">
+                    <CheckCircle2 size={20} />
+                    Strengths
+                  </h5>
+                  <ul className="list-disc space-y-1 pl-5 text-secondary">
+                    {finalReview.strengths.length ? finalReview.strengths.map((item: string) => <li key={item}>{item}</li>) : <li>Solid progress on the requested ticket scope.</li>}
+                  </ul>
+                </div>
+                <div className="rounded-xl border border-rose-400/20 bg-rose-500/10 p-3">
+                  <h5 className="mb-1 flex items-center gap-2 font-semibold text-rose-200">
+                    <Bug size={20} />
+                    Weaknesses
+                  </h5>
+                  <ul className="list-disc space-y-1 pl-5 text-secondary">
+                    {finalReview.weaknesses.length ? finalReview.weaknesses.map((item: string) => <li key={item}>{item}</li>) : <li>No critical weaknesses detected.</li>}
+                  </ul>
                 </div>
               </div>
-
-              <div className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-                <div className="surface-subtle p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/80">
-                      <GitHubMark size={20} className="text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted">Repository</p>
-                      <a
-                        href={issue ? `https://github.com/${issue.repositoryFullName}` : "#"}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-1 inline-flex items-center gap-2 text-sm font-medium text-brand-200"
-                      >
-                        {issue?.repositoryFullName ?? "Loading repository..."}
-                        <ExternalLink size={16} />
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 space-y-3">
-                    <div className="step-item">
-                      <span className="step-index">1</span>
-                      <div className="flex items-start gap-3">
-                        <GitFork size={18} className="mt-0.5 text-brand-300" />
-                        <span>Fork the repository</span>
-                      </div>
-                    </div>
-                    <div className="step-item">
-                      <span className="step-index">2</span>
-                      <div className="flex items-start gap-3">
-                        <TerminalSquare size={18} className="mt-0.5 text-brand-300" />
-                        <span>Clone it locally</span>
-                      </div>
-                    </div>
-                    <div className="step-item">
-                      <span className="step-index">3</span>
-                      <div className="flex items-start gap-3">
-                        <GitBranchPlus size={18} className="mt-0.5 text-brand-300" />
-                        <span>Create a new branch</span>
-                      </div>
-                    </div>
-                    <div className="step-item">
-                      <span className="step-index">4</span>
-                      <div className="flex items-start gap-3">
-                        <Bug size={18} className="mt-0.5 text-brand-300" />
-                        <span>Apply the fix</span>
-                      </div>
-                    </div>
-                    <div className="step-item">
-                      <span className="step-index">5</span>
-                      <div className="flex items-start gap-3">
-                        <GitCommitHorizontal size={18} className="mt-0.5 text-brand-300" />
-                        <span>Commit and push</span>
-                      </div>
-                    </div>
-                    <div className="step-item">
-                      <span className="step-index">6</span>
-                      <div className="flex items-start gap-3">
-                        <GitPullRequestArrow size={18} className="mt-0.5 text-brand-300" />
-                        <span>Open a pull request</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="timeline-card mt-6">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted">Ready to Contribute?</p>
-                    <p className="mt-2 text-sm leading-6 text-secondary">
-                      Your simulation run is done. Carry the same fix into the upstream repository and
-                      submit it as a real contribution.
-                    </p>
-                  </div>
-
-                  {guideSteps.length ? (
-                    <div className="mt-6 rounded-2xl border border-brand-400/20 bg-brand-500/10 p-4">
-                      <p className="text-sm font-medium text-brand-100">Guide status</p>
-                      <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-secondary">
-                        {contributionSteps.map((step) => (
-                          <li key={step}>{step}</li>
-                        ))}
-                      </ol>
-                    </div>
-                  ) : null}
+            ) : iterativeFeedback ? (
+              <div className="mt-3 space-y-3 text-sm text-primary">
+                <div className="flex flex-wrap gap-2">
+                  <span className={`status-chip ${iterativeFeedback.status === "correct" ? "status-pass" : "status-review"} gap-1`}>
+                    {iterativeFeedback.status === "correct" ? <CheckCircle2 size={20} /> : <Bug size={20} />}
+                    {iterativeFeedback.status === "correct" ? "Correct" : iterativeFeedback.status === "almost" ? "Almost" : "Progress"}
+                  </span>
+                  <span className="status-chip status-review">Confidence {(iterativeFeedback.confidence * 100).toFixed(1)}%</span>
                 </div>
-
-                <div className="surface-subtle p-5">
+                <p className="text-secondary">{iterativeFeedback.summary}</p>
+                <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+                  <h5 className="mb-1 flex items-center gap-2 font-semibold text-emerald-200">
+                    <CheckCircle2 size={20} />
+                    What you did right
+                  </h5>
+                  <ul className="list-disc space-y-1 pl-5 text-secondary">
+                    {iterativeFeedback.what_you_did_right.length ? (
+                      iterativeFeedback.what_you_did_right.map((item: string) => <li key={item}>{item}</li>)
+                    ) : (
+                      <li>Your changes are moving in the right direction.</li>
+                    )}
+                  </ul>
+                </div>
+                <div className="rounded-xl border border-rose-400/20 bg-rose-500/10 p-3">
+                  <h5 className="mb-1 flex items-center gap-2 font-semibold text-rose-200">
+                    <Bug size={20} />
+                    What needs improvement
+                  </h5>
+                  <ul className="list-disc space-y-1 pl-5 text-secondary">
+                    {iterativeFeedback.what_to_improve.length ? (
+                      iterativeFeedback.what_to_improve.map((item: string) => <li key={item}>{item}</li>)
+                    ) : (
+                      <li>No critical issues detected in this iteration.</li>
+                    )}
+                  </ul>
+                </div>
+                <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3">
+                  <h5 className="mb-1 flex items-center gap-2 font-semibold text-blue-200">
+                    <Lightbulb size={20} />
+                    Suggested focus area
+                  </h5>
+                  <p className="text-secondary">{iterativeFeedback.suggested_focus_area}</p>
+                </div>
+                <div className="rounded-xl border border-brand-400/20 bg-brand-500/10 p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted">Git Commands</p>
-                      <p className="mt-2 text-sm text-secondary">
-                        Run these locally after forking to move your fix into a real branch.
-                      </p>
-                    </div>
-                    {issue ? (
-                      <a className="ui-button" href={issue.url} target="_blank" rel="noreferrer">
-                        <ArrowUpRight size={18} />
-                        View Issue on GitHub
-                      </a>
-                    ) : null}
+                    <p className="text-xs uppercase tracking-wide text-brand-100">Issue Progress</p>
+                    <span className="text-sm text-primary">{Math.round(iterativeFeedback.confidence * 100)}%</span>
                   </div>
-
-                  <pre className="code-block mt-4">{contributionCommands || "Run code to unlock contribution guidance."}</pre>
-
-                  {contributionDraft ? (
-                    <div className="mt-5 rounded-2xl border border-brand-400/20 bg-brand-500/10 p-4">
-                      <p className="text-xs uppercase tracking-[0.2em] text-brand-100">Suggested Commit</p>
-                      <pre className="code-block mt-3">{contributionDraft.commitMessage}</pre>
-                      <p className="mt-4 text-xs uppercase tracking-[0.2em] text-brand-100">Suggested PR Title</p>
-                      <pre className="code-block mt-3">{contributionDraft.prTitle}</pre>
-                      <p className="mt-4 text-xs uppercase tracking-[0.2em] text-brand-100">Suggested PR Description</p>
-                      <pre className="code-block mt-3">{contributionDraft.prDescription}</pre>
-                    </div>
-                  ) : null}
-
-                  {activeGuide ? (
-                    <div className="timeline-card mt-5">
-                      <p className="text-sm text-secondary">
-                        Branch <span className="font-semibold text-brand-200">{activeGuide.branch_name}</span>
-                      </p>
-                      <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                        <input
-                          className="ui-input"
-                          value={prUrl}
-                          onChange={(event) => setPrUrl(event.target.value)}
-                          placeholder="https://github.com/owner/repo/pull/123"
-                        />
-                        <select
-                          value={prStatus}
-                          onChange={(event) =>
-                            setPrStatus(
-                              event.target.value as
-                                | "opened"
-                                | "in_review"
-                                | "changes_requested"
-                                | "merged"
-                                | "closed"
-                            )
-                          }
-                          title="Pull request status"
-                          aria-label="Pull request status"
-                          className="ui-input"
-                        >
-                          <option value="opened">opened</option>
-                          <option value="in_review">in_review</option>
-                          <option value="changes_requested">changes_requested</option>
-                          <option value="merged">merged</option>
-                          <option value="closed">closed</option>
-                        </select>
-                      </div>
-                      <button
-                        className="ui-button mt-4"
-                        type="button"
-                        disabled={isSavingPr || !prUrl}
-                        onClick={handleAttachPr}
-                      >
-                        {isSavingPr ? "Saving..." : "Attach Pull Request"}
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="mt-4 text-sm text-secondary">
-                      Prepare the guide to generate a tracked branch name and save your pull request URL.
-                    </p>
-                  )}
+                  <div className="mt-2 h-2 rounded-full bg-white/10">
+                    <progress
+                      value={Math.max(1, Math.round(iterativeFeedback.confidence * 100))}
+                      max={100}
+                      className="h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-white/10 [&::-webkit-progress-value]:bg-brand-400 [&::-moz-progress-bar]:bg-brand-400"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : null}
+            ) : (
+              <p className="mt-2 text-sm text-secondary">
+                Run Code for iterative mentor feedback, then use Submit for Review to get final senior engineer verdict.
+              </p>
+            )}
+          </div>
 
           <div className="ui-card">
             <h4 className="text-lg font-semibold text-primary">My Submissions</h4>
@@ -1071,33 +1003,11 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
                       <span className="status-chip status-review border">
                         {new Date(item.created_at).toLocaleString()}
                       </span>
-                      <span
-                        className={`status-chip border ${
-                          item.is_expected_output_match === true
-                            ? "status-pass"
-                            : item.is_expected_output_match === false
-                              ? "status-fail"
-                              : "status-review"
-                        }`}
-                      >
-                        {item.is_expected_output_match === null
-                          ? "Expected N/A"
-                          : item.is_expected_output_match
-                            ? "Expected Match"
-                            : "Expected Mismatch"}
-                      </span>
                       {item.evaluation ? (
-                        <span className={`status-chip border ${toStatusTone(item.evaluation.verdict)}`}>
-                          AI {item.evaluation.verdict}
-                        </span>
+                        <span className="status-chip status-review border">AI {item.evaluation.verdict}</span>
                       ) : null}
                     </div>
-                    <p>Judge0: {item.judge0_status_description ?? "Unknown"}</p>
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-brand-300">Output details</summary>
-                      <pre className="code-block">stdout: {item.stdout || "<none>"}</pre>
-                      <pre className="code-block">stderr: {item.stderr || "<none>"}</pre>
-                    </details>
+                    <p>Analyzer status: {item.judge0_status_description ?? "In progress"}</p>
                   </article>
                 ))
               ) : (
@@ -1107,24 +1017,30 @@ export default function IssueSolvePage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="ui-card">
-            <h4 className="text-lg font-semibold text-primary">Contribution History</h4>
-            <div className="mt-3 space-y-2">
-              {contributions.length ? (
-                contributions.map((guide) => (
-                  <article key={guide.id} className="surface-elevated rounded-xl p-3 text-sm text-secondary">
-                    <div className="mb-1 flex flex-wrap gap-2">
-                      <span className="status-chip status-review border">{new Date(guide.updated_at).toLocaleString()}</span>
-                      <span className="status-chip status-review border">{guide.pr_status}</span>
-                    </div>
-                    <p>Branch: {guide.branch_name}</p>
-                    <p>
-                      PR: {guide.pr_url ? <a href={guide.pr_url}>{guide.pr_url}</a> : "Not attached"}
-                    </p>
-                  </article>
-                ))
-              ) : (
-                <p className="text-sm text-secondary">No contribution records yet.</p>
-              )}
+            <h4 className="text-lg font-semibold text-primary">Next Step</h4>
+            <p className="mt-2 text-sm text-secondary">
+              Once your confidence is high, continue to contribution flow with branch, commit, and PR guidance.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                className="ui-button"
+                type="button"
+                onClick={handleCompleteSimulation}
+                disabled={!finalReview && !analysis}
+              >
+                Mark as Completed
+              </button>
+              {issue ? (
+                <Link className="ui-button-muted" href={`/issues/${issue.id}/contribution`}>
+                  Open Contribution Page
+                </Link>
+              ) : null}
+              {issue ? (
+                <a className="ui-button-muted" href={issue.url} target="_blank" rel="noreferrer">
+                  <ArrowUpRight size={18} />
+                  View Issue on GitHub
+                </a>
+              ) : null}
             </div>
           </div>
         </div>

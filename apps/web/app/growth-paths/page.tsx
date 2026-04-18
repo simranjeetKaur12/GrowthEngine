@@ -12,7 +12,12 @@ import { supabaseBrowser } from "../../lib/supabase-browser";
 const iconMap = {
   python: Code2,
   "web-development": Sparkles,
-  "machine-learning": BrainCircuit
+  "machine-learning": BrainCircuit,
+  "ai-engineering": BrainCircuit,
+  "data-engineering": Map,
+  "cloud-devops": Sparkles,
+  cybersecurity: Map,
+  "mobile-development": Code2
 } as const;
 
 export default function GrowthPathsPage() {
@@ -105,9 +110,10 @@ export default function GrowthPathsPage() {
                     <span>{item.progress.completionRate}%</span>
                   </div>
                   <div className="h-2 rounded-full bg-white/5">
-                    <div
-                      className="h-2 rounded-full bg-brand-400 transition-all duration-200"
-                      style={{ width: `${Math.max(item.progress.completionRate, 4)}%` }}
+                    <progress
+                      value={Math.max(item.progress.completionRate, 4)}
+                      max={100}
+                      className="h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-white/5 [&::-webkit-progress-value]:bg-brand-400 [&::-moz-progress-bar]:bg-brand-400"
                     />
                   </div>
                 </div>

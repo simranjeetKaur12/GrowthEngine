@@ -1,14 +1,18 @@
 import type {
   ClassifiedIssue,
   DiscoveredProblem,
+  FinalReviewFeedback,
   GrowthPathProgress,
+  IterativeAnalyzerFeedback,
   LearningDayDetail,
   LearningPathDetail,
   LearningPathSummary,
+  TicketRecord,
   UserSettings,
   SimulationSessionRecord,
   UserStats,
-  UserProgressOverview
+  UserProgressOverview,
+  IssueAnalysisResult
 } from "@growthengine/shared";
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -95,6 +99,41 @@ export interface ExecuteSubmissionResult {
   stderr: string | null;
   compile_output: string | null;
   status: { id: number; description: string };
+  analysis?: IssueAnalysisResult | null;
+  iterativeFeedback?: IterativeAnalyzerFeedback | null;
+  finalReview?: FinalReviewFeedback | null;
+  evaluationId?: string;
+  evaluation?: {
+    verdict: "pass" | "fail" | "review";
+    summary: string;
+    strengths: string[];
+    weaknesses: string[];
+    risks: string[];
+    suggestions: string[];
+    edge_cases: string[];
+    bugs: string[];
+    improvements: string[];
+    optimization: string[];
+    correctness: "pass" | "fail" | "partial";
+    confidence: number;
+    score: number;
+    modelName: string;
+  };
+}
+
+export interface WorkspaceDiffFile {
+  path: string;
+  language?: string;
+  originalContent?: string;
+  updatedContent: string;
+  diff?: string;
+}
+
+export interface WorkspaceDiffPayload {
+  repository?: string;
+  issueUrl?: string;
+  notes?: string;
+  files: WorkspaceDiffFile[];
 }
 
 export interface EvaluateSubmissionResult {
@@ -105,8 +144,10 @@ export interface EvaluateSubmissionResult {
     verdict: "pass" | "fail" | "review";
     summary: string;
     strengths: string[];
+    weaknesses: string[];
     risks: string[];
     suggestions: string[];
+    edge_cases: string[];
     bugs: string[];
     improvements: string[];
     optimization: string[];
@@ -129,7 +170,17 @@ export async function ingestRepository(repository: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to ingest repository issues");
+    let message = "Failed to ingest repository issues";
+    try {
+      const payload = (await response.json()) as { error?: unknown };
+      if (typeof payload.error === "string" && payload.error.trim()) {
+        message = payload.error;
+      }
+    } catch {
+      // ignore JSON parsing failures and keep generic message
+    }
+
+    throw new Error(message);
   }
 
   return response.json();
@@ -172,6 +223,8 @@ export async function executeSubmission(payload: {
   sourceCode: string;
   stdin?: string;
   expectedOutput?: string;
+  workspace?: WorkspaceDiffPayload;
+  evaluationMode?: "iterative_feedback" | "final_review";
 }) {
   const { accessToken, ...body } = payload;
   const response = await fetch(`${apiBase}/api/submissions/execute`, {
@@ -185,6 +238,76 @@ export async function executeSubmission(payload: {
   }
 
   return response.json() as Promise<ExecuteSubmissionResult>;
+}
+
+export async function createTicket(payload: { accessToken?: string; issueId: number }) {
+  const response = await fetch(`${apiBase}/api/tickets/create`, {
+    method: "POST",
+    headers: getAuthHeaders(payload.accessToken),
+    body: JSON.stringify({ issueId: payload.issueId })
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to create ticket");
+  }
+
+  return response.json() as Promise<{ ticket: TicketRecord }>;
+}
+
+export async function fetchTickets(payload: {
+  accessToken?: string;
+  issueId?: number;
+}) {
+  const query = new URLSearchParams();
+  if (typeof payload.issueId === "number") {
+    query.set("issueId", String(payload.issueId));
+  }
+
+  const response = await fetch(`${apiBase}/api/tickets?${query.toString()}`, {
+    headers: getReadHeaders(payload.accessToken),
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch tickets");
+  }
+
+  return response.json() as Promise<{ items: TicketRecord[] }>;
+}
+
+export async function startTicket(payload: { accessToken?: string; ticketId: string }) {
+  const response = await fetch(`${apiBase}/api/tickets/start`, {
+    method: "POST",
+    headers: getAuthHeaders(payload.accessToken),
+    body: JSON.stringify({ ticketId: payload.ticketId })
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to start ticket");
+  }
+
+  return response.json() as Promise<{ ticket: TicketRecord }>;
+}
+
+export async function completeTicket(payload: {
+  accessToken?: string;
+  ticketId: string;
+  approved: boolean;
+  iterativeFeedback?: IterativeAnalyzerFeedback;
+  finalReview?: FinalReviewFeedback;
+}) {
+  const { accessToken, ...body } = payload;
+  const response = await fetch(`${apiBase}/api/tickets/complete`, {
+    method: "POST",
+    headers: getAuthHeaders(accessToken),
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to complete ticket state transition");
+  }
+
+  return response.json() as Promise<{ ticket: TicketRecord }>;
 }
 
 export async function evaluateSubmission(payload: {

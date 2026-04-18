@@ -174,7 +174,8 @@ growthPathsRouter.post("/:pathId/days/:dayNumber/execute", async (req: Authentic
         sourceCode: parsed.data.sourceCode,
         stdin: parsed.data.stdin,
         expectedOutput: parsed.data.expectedOutput ?? learningDay.day.expectedOutput ?? undefined
-      }
+      },
+      mode: "growth-path"
     });
 
     const progress = await updateGrowthPathProgressAfterExecution({

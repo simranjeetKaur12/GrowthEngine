@@ -1,15 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
 
-import { fetchGithubIssues } from "../integrations/github";
+import { fetchGithubIssues, normalizeRepositoryInput } from "../integrations/github";
 import { classifyIssues } from "../modules/classifier";
+import { buildGuidedIssueContext } from "../modules/guided-context";
 import { adaptIssuesForBeginners } from "../modules/problem-adapter";
 import { getIssueById, listIssues, upsertIssues } from "../modules/store";
 import { materializeDiscoveredProblems } from "../services/problems/materialize";
 import { upsertDiscoveredProblems } from "../services/problems/problem-store";
 
 const ingestSchema = z.object({
-  repository: z.string().trim().regex(/^[^/\s]+\/[^/\s]+$/, "Repository must be in owner/repo format")
+  repository: z.string().trim().min(3, "Repository is required")
 });
 
 export const issueRouter = Router();
@@ -21,15 +22,23 @@ issueRouter.post("/ingest", async (req, res) => {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
 
+  let normalizedRepository = "";
   try {
-    const rawIssues = await fetchGithubIssues(parsed.data.repository);
+    normalizedRepository = normalizeRepositoryInput(parsed.data.repository);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Repository format is invalid";
+    return res.status(400).json({ error: message });
+  }
+
+  try {
+    const rawIssues = await fetchGithubIssues(normalizedRepository);
     const classified = await classifyIssues(rawIssues);
     const adapted = await adaptIssuesForBeginners(classified);
     await upsertIssues(adapted);
     await upsertDiscoveredProblems(materializeDiscoveredProblems(adapted));
 
     return res.json({
-      repository: parsed.data.repository,
+      repository: normalizedRepository,
       fetched: rawIssues.length,
       ingested: adapted.length,
       problemsCreated: adapted.length
@@ -66,7 +75,13 @@ issueRouter.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Issue not found" });
     }
 
-    return res.json({ item: issue });
+    const guidedContext = await buildGuidedIssueContext(issue);
+    return res.json({
+      item: {
+        ...issue,
+        guided_context: guidedContext
+      }
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load issue";
     return res.status(500).json({ error: message });
