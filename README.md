@@ -305,7 +305,7 @@ The screenshots below show different parts of the GrowthEngine experience, from 
 ### Main Experience
 
 <p align="center">
-  <img src="./lightTheme.png" alt="GrowthEngine light theme landing page" width="47%" />
+  <img src="./images/lightTheme.png" alt="GrowthEngine light theme landing page" width="47%" />
 </p>
 
 ### Product Screens
