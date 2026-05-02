@@ -6,6 +6,29 @@ import { getUserProgressOverview, listContributionGuides } from "../../modules/s
 const inMemoryUsers = new Map<string, { id: string; name: string | null; email: string; created_at: string }>();
 const inMemorySettings = new Map<string, UserSettings>();
 
+type UserSettingsRow = {
+  user_id: string;
+  default_language: UserSettings["defaultLanguage"];
+  editor_theme: UserSettings["editorTheme"];
+  font_size: number;
+  tab_size: number;
+  auto_save: boolean;
+  feedback_verbosity: UserSettings["feedbackVerbosity"];
+  hints_enabled: boolean;
+  explanation_after_submission: boolean;
+  skill_focus: UserSettings["skillFocus"];
+  difficulty_level: UserSettings["difficultyLevel"];
+  daily_learning_goal: number;
+  adaptive_learning: boolean;
+  simulation_mode: UserSettings["simulationMode"];
+  preferred_repository_type: UserSettings["preferredRepositoryType"];
+  auto_generate_pr_guide: boolean;
+  github_connected: boolean;
+  automatic_repo_sync: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 function db() {
   return supabase;
 }
@@ -81,7 +104,7 @@ function toSettingsRow(settings: UserSettings) {
   };
 }
 
-function fromSettingsRow(row: any): UserSettings {
+function fromSettingsRow(row: UserSettingsRow): UserSettings {
   return {
     userId: row.user_id,
     defaultLanguage: row.default_language,

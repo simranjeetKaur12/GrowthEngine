@@ -11,7 +11,7 @@
     "dev:web": "npm run dev --workspace apps/web",
     "dev:api": "npm run dev --workspace services/api",
     "dev:worker": "npm run dev --workspace services/workers",
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspace @growthengine/shared && npm run build --workspace @growthengine/api && npm run build --workspace @growthengine/worker && npm run build --workspace @growthengine/workers && npm run build --workspace @growthengine/web",
     "lint": "npm run lint --workspaces",
     "test": "npm run test --workspaces"
   },

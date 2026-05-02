@@ -10,7 +10,7 @@
     "test": "echo no-test"
   },
   "dependencies": {
-    "@growthengine/shared": "0.1.0",
+    "@growthengine/shared": "*",
     "@monaco-editor/react": "^4.7.0",
     "@supabase/supabase-js": "^2.50.0",
     "lucide-react": "'~'1.7.0",

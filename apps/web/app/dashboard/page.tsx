@@ -3,6 +3,7 @@
 import { CheckCircle2, FolderGit2, GitPullRequestArrow, PlayCircle, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import type { ProgressIssueSummary, UserProgressOverview } from "@growthengine/shared";
 import type { Session } from "@supabase/supabase-js";
 
 import { DashboardShell } from "../../components/dashboard-shell";
@@ -34,7 +35,7 @@ export default function DashboardPage() {
   const [message, setMessage] = useState("");
   const [profileName, setProfileName] = useState<string | null>(null);
   const [stats, setStats] = useState<Awaited<ReturnType<typeof fetchUserStats>> | null>(null);
-  const [overview, setOverview] = useState<Awaited<ReturnType<typeof fetchProgressOverview>> | null>(null);
+  const [overview, setOverview] = useState<UserProgressOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
 
@@ -163,7 +164,7 @@ export default function DashboardPage() {
           <h3 className="text-lg font-semibold text-primary">Recently Attempted Problems</h3>
           {overview?.issueSummaries.length ? (
             <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-              {overview.issueSummaries.slice(0, 4).map((item) => (
+              {overview.issueSummaries.slice(0, 4).map((item: ProgressIssueSummary) => (
                 <article key={item.issueId} className="surface-elevated p-5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="status-chip status-review border">{item.status.replace(/_/g, " ")}</span>

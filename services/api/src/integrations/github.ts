@@ -12,6 +12,17 @@ const githubIssueSchema = z.object({
   pull_request: z.unknown().optional()
 });
 
+function hasPath(item: { path?: string; type?: string }): item is { path: string; type?: string } {
+  return typeof item.path === "string";
+}
+
+function isRelevantRepositoryFile(path: string) {
+  return (
+    /\.(ts|tsx|js|jsx|py|java|cpp|cxx|cc|css|json|md)$/i.test(path) &&
+    !/(node_modules|dist|build|coverage|\.next|target|vendor)\//i.test(path)
+  );
+}
+
 function isValidRepoPart(value: string) {
   return /^[A-Za-z0-9._-]+$/.test(value);
 }
@@ -166,10 +177,9 @@ export async function fetchRepositoryFilePaths(repoFullName: string): Promise<st
     tree?: Array<{ path?: string; type?: string }>;
   };
 
-  return (treeData.tree ?? [])
-    .filter((item) => item.type === "blob" && typeof item.path === "string")
-    .map((item) => item.path)
-    .filter((path) => /\.(ts|tsx|js|jsx|py|java|cpp|cxx|cc|css|json|md)$/i.test(path))
-    .filter((path) => !/(node_modules|dist|build|coverage|\.next|target|vendor)\//i.test(path))
-    .slice(0, 120);
+  const filePaths = (treeData.tree ?? []).flatMap((item) =>
+    item.type === "blob" && hasPath(item) && isRelevantRepositoryFile(item.path) ? [item.path] : []
+  );
+
+  return filePaths.slice(0, 120);
 }

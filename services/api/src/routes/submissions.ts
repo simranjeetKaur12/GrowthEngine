@@ -7,7 +7,8 @@ import {
   evaluateSubmissionWithEngine
 } from "../modules/evaluation-engine";
 import {
-  issueAnalysisToEvaluation
+  issueAnalysisToEvaluation,
+  type IssueAnalyzerResult
 } from "../modules/issue-analyzer";
 import { packSourceWithWorkspace, unpackSourceWorkspace } from "../modules/submission-workspace";
 import {
@@ -79,7 +80,7 @@ function iterativeToLegacyAnalysis(iterative: {
     confidence: iterative.confidence,
     summary: iterative.summary,
     modelName: "iterative-feedback"
-  };
+  } satisfies IssueAnalyzerResult;
 }
 
 function toFinalReview(evaluation: {

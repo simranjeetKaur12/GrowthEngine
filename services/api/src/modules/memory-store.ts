@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import type {
   ClassifiedIssue,
   Difficulty,
+  ProgressIssueSummary,
   ProgressTimelineItem,
   SimulationSessionRecord,
   UserProgressOverview
@@ -474,11 +475,11 @@ export async function getUserProgressOverview(userId: string): Promise<UserProgr
   for (const session of sessionItems) {
     const issue = issues.get(session.issueId);
     if (issue) {
-      metrics.difficultyDistribution[issue.difficulty] += 1;
+      metrics.difficultyDistribution[issue.difficulty as Difficulty] += 1;
     }
   }
 
-  const issueSummaries = sessionItems.map((session) => {
+  const issueSummaries: ProgressIssueSummary[] = sessionItems.map((session) => {
     const issue = getIssueOrThrow(session.issueId);
 
     return {
