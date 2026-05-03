@@ -16,8 +16,7 @@
     "checkJs": false
   },
   "include": [
-    "src", 
-    "../../packages/shared/src" // Added: specifically include the shared source
+    "src"
   ],
   "references": [
   { "path": "../../packages/shared" }
