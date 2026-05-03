@@ -1,18 +1,25 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "baseUrl": ".",
     "paths": {
-      "@growthengine/shared": ["../../packages/shared/dist/index.d.ts"]
+      "@growthengine/shared": ["../../packages/shared/src/index.ts"]
     },
+    "rootDir": "../../",
     "outDir": "dist",
-    "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "checkJs": false
   },
-  "include": ["src"]
+  "include": [
+    "src", 
+    "../../packages/shared/src" // Added: specifically include the shared source
+  ],
+  "references": [
+  { "path": "../../packages/shared" }
+]
 }

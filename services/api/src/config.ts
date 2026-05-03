@@ -28,7 +28,7 @@ function readBoolean(name: string, fallback: boolean) {
 }
 
 export const env = {
-  apiPort: readNumber("API_PORT", 4000),
+  apiPort: readNumber("PORT", 4000),
   supabaseUrl: readOptional("SUPABASE_URL"),
   supabaseServiceRoleKey: readOptional("SUPABASE_SERVICE_ROLE_KEY"),
   supabaseSchema: readOptional("SUPABASE_SCHEMA") ?? "public",
