@@ -42,3 +42,7 @@ coverage/
 
 *.pptx
 *.log
+
+# Docs
+RAILWAY_DEPLOYMENT.md
+SECURITY_AUDIT.md

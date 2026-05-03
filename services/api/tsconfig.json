@@ -4,21 +4,20 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "baseUrl": ".",
-    "paths": {
-      "@growthengine/shared": ["../../packages/shared/src/index.ts"]
-    },
-    "rootDir": "../../",
-    "outDir": "dist",
+    "paths": {},
+    "outDir": "./dist",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "checkJs": false
+    "checkJs": false,
+    "composite": true
   },
   "include": [
-    "src"
+    "src/**/*"
   ],
   "references": [
-  { "path": "../../packages/shared" }
-]
+    { "path": "../../packages/shared" }
+  ]
 }

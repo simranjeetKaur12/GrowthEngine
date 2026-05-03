@@ -6,10 +6,11 @@
     "strict": true,
     "declaration": true,
     "declarationMap": true,
-    "outDir": "./dist", 
+    "outDir": "dist",
+    "rootDir": "src", 
+    "composite": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "composite": true
   },
-  "include": ["src"]
+  "include": ["src/**/*"]
 }
